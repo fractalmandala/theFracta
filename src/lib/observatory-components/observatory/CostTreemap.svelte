@@ -1,55 +1,64 @@
 <script lang="ts">
-	import { observatory } from "$lib/observatory-state/observatory.svelte";
-	const dollars = (microdollars: number) =>
-		(microdollars / 1_000_000).toFixed(2);
+	import { observatory } from '$lib/observatory-state/observatory.svelte';
+	const dollars = (microdollars: number) => (microdollars / 1_000_000).toFixed(2);
 	let usage = $derived(observatory.resources?.usage ?? null);
 </script>
 
-<section class="usage" aria-labelledby="usage-title">
-	<header>
-		<p class="eyebrow">Canonical usage summary</p>
-		<h2 id="usage-title">Usage and cost</h2>
-		<p class="muted">
-			Costs are reported by Fractorches in microdollars; no session cost
-			is inferred.
-		</p>
+<section class="box gap-md pad-md" aria-labelledby="usage-title">
+	<header class="box gap-3xs">
+		<p class="eyebrow text-xs">Canonical usage summary</p>
+		<h2 id="usage-title" class="text-lg weight-600 m-0">Usage and cost</h2>
+		<p class="muted text-sm m-0">Costs are reported by Fractorches in microdollars; no session cost is inferred.</p>
 	</header>
-	{#if usage}<div class="metrics">
-			<div>
-				<strong>${dollars(usage.totals.totalCost.microdollars)}</strong
-				><span>Total cost</span>
+
+	{#if usage}
+		<dl class="metrics-grid">
+			<div class="metric-item card border pad-sm box gap-3xs">
+				<dt class="text-xs weight-500 text-muted tt-u">Total cost</dt>
+				<dd class="text-md weight-600 m-0">${dollars(usage.totals.totalCost.microdollars)}</dd>
 			</div>
-			<div>
-				<strong>{usage.totals.inputTokens.toLocaleString()}</strong
-				><span>Input tokens</span>
+			<div class="metric-item card border pad-sm box gap-3xs">
+				<dt class="text-xs weight-500 text-muted tt-u">Input tokens</dt>
+				<dd class="text-md weight-600 m-0">{usage.totals.inputTokens.toLocaleString()}</dd>
 			</div>
-			<div>
-				<strong>{usage.totals.outputTokens.toLocaleString()}</strong
-				><span>Output tokens</span>
+			<div class="metric-item card border pad-sm box gap-3xs">
+				<dt class="text-xs weight-500 text-muted tt-u">Output tokens</dt>
+				<dd class="text-md weight-600 m-0">{usage.totals.outputTokens.toLocaleString()}</dd>
 			</div>
-			<div>
-				<strong>{usage.totals.cacheReadTokens.toLocaleString()}</strong
-				><span>Cache reads</span>
+			<div class="metric-item card border pad-sm box gap-3xs">
+				<dt class="text-xs weight-500 text-muted tt-u">Cache reads</dt>
+				<dd class="text-md weight-600 m-0">{usage.totals.cacheReadTokens.toLocaleString()}</dd>
 			</div>
-		</div>
-		<h3>Cost by project</h3>
-		<div class="bars">
-			{#each usage.projectTotals as row}<div class="bar">
-					<span>{row.project || row.project_key}</span><strong
-						>${dollars(row.cost.microdollars)}</strong
-					>
-				</div>{:else}<p class="muted">
-					No project usage reported for this filter.
-				</p>{/each}
-		</div>
-		<h3>Daily cost</h3>
-		<div class="daily">
-			{#each usage.daily as row}<div>
-					<span>{row.date}</span><strong
-						>${dollars(row.totalCost.microdollars)}</strong
-					>
-				</div>{:else}<p class="muted">
-					No daily usage reported for this filter.
-				</p>{/each}
-		</div>{:else}<p class="muted">Usage is unavailable.</p>{/if}
+		</dl>
+
+		<section class="box gap-2xs">
+			<h3 class="text-sm weight-600 m-0">Cost by project</h3>
+			<div class="card border">
+				{#each usage.projectTotals as row (row.project_key)}
+					<div class="row ycenter xbetween gap-2xs pad-x-sm pad-y-2xs border-bottom text-sm">
+						<span class="truncate">{row.project || row.project_key}</span>
+						<strong class="tabular-nums shrink-0">${dollars(row.cost.microdollars)}</strong>
+					</div>
+				{:else}
+					<p class="muted text-sm pad-sm m-0">No project usage reported for this filter.</p>
+				{/each}
+			</div>
+		</section>
+
+		<section class="box gap-2xs">
+			<h3 class="text-sm weight-600 m-0">Daily cost</h3>
+			<div class="card border">
+				{#each usage.daily as row (row.date)}
+					<div class="row ycenter xbetween gap-2xs pad-x-sm pad-y-2xs border-bottom text-sm">
+						<span class="truncate">{row.date}</span>
+						<strong class="tabular-nums shrink-0">${dollars(row.totalCost.microdollars)}</strong>
+					</div>
+				{:else}
+					<p class="muted text-sm pad-sm m-0">No daily usage reported for this filter.</p>
+				{/each}
+			</div>
+		</section>
+	{:else}
+		<p class="muted text-sm">Usage is unavailable.</p>
+	{/if}
 </section>

@@ -6,49 +6,17 @@
 	import LogEntryDetail from '$lib/observatory-components/logs/LogEntryDetail.svelte';
 	import { onMount } from 'svelte';
 
-	onMount(() => {
-		logsState.fetchIndex();
-	});
+	onMount(() => logsState.fetchIndex());
 </script>
 
-<div class="logs-page-layout">
-	<!-- Left Logs Navigation Sidebar -->
-	<aside class="logs-sidebar">
+<!-- Page type: logs browser with persistent left sidebar (calendar + day list) and main timeline. -->
+<div class="logs-page row grow min0 wfull">
+	<aside class="logs-sidebar border-right box gap-sm pad-sm overflow-y-auto">
 		<LogCalendar />
 		<DayList />
 	</aside>
-
-	<!-- Main Timeline Pane -->
-	<div class="timeline-pane">
+	<div class="timeline-pane grow min0">
 		<LogTimeline />
 	</div>
-
-	<!-- Modal Detail -->
 	<LogEntryDetail />
 </div>
-
-<style>
-	.logs-page-layout {
-		display: flex;
-		width: 100%;
-		height: 100%;
-		overflow: hidden;
-	}
-	.logs-sidebar {
-		width: 320px;
-		background: var(--bg-panel);
-		border-right: 1px solid var(--border);
-		padding: 16px;
-		display: flex;
-		flex-direction: column;
-		gap: 16px;
-		overflow-y: auto;
-		flex: none;
-	}
-	.timeline-pane {
-		flex: 1;
-		height: 100%;
-		overflow: hidden;
-		background: var(--bg);
-	}
-</style>

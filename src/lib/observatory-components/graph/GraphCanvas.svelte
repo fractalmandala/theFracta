@@ -7,9 +7,7 @@
 
 	let { scan }: { scan: any } = $props();
 
-	const nodeTypes = {
-		box: BoxNode
-	};
+	const nodeTypes = { box: BoxNode };
 
 	let flowNodes = $state.raw<any[]>([]);
 	let flowEdges = $state.raw<any[]>([]);
@@ -20,12 +18,10 @@
 	const flows = $derived(scan?.flows ?? []);
 	const groups = $derived(scan?.groups ?? []);
 
-	// Active flow path calculation
 	const activeFlow = $derived(flows.find((f: any) => f.id === graphState.activeFlowId));
 	const flowSteps = $derived(activeFlow?.steps ?? []);
 	const onPath = $derived(new Set(flowSteps));
 
-	// Normalize nodes & lanes
 	const normalizedGraph = $derived.by(() => {
 		const used = new Set(rawNodes.map((n: any) => n.group).filter(Boolean));
 		const nodesIn: any[] = [];
@@ -36,14 +32,14 @@
 				kind: 'dir',
 				label: g.label ?? g.id,
 				parentId: null,
-				data: { files: 0, loc: 0, lane: true }
+				data: { files: 0, loc: 0, lane: true },
 			});
 		}
 		for (const n of rawNodes) {
 			nodesIn.push({
 				...n,
 				parentId: n.parentId ?? (n.group && used.has(n.group) ? `group:${n.group}` : null),
-				data: { files: 0, loc: 0, ...(n.data ?? {}) }
+				data: { files: 0, loc: 0, ...(n.data ?? {}) },
 			});
 		}
 		return {
@@ -52,12 +48,11 @@
 				...e,
 				id: e.id ?? `e${i}`,
 				layer: e.layer ?? e.kind ?? 'import:internal',
-				weight: e.weight ?? 1
-			}))
+				weight: e.weight ?? 1,
+			})),
 		};
 	});
 
-	// Compute ELK layout
 	$effect(() => {
 		const graph = normalizedGraph;
 		const collapsed = graphState.collapsed;
@@ -118,26 +113,10 @@
 							selected: graphState.selectedNode?.id === id,
 							rawNode: orig,
 							onToggle: (nodeId: string) => graphState.toggleCollapse(nodeId),
-							onSelect: (nodeObj: any) => graphState.selectNode(nodeObj)
-						}
+							onSelect: (nodeObj: any) => graphState.selectNode(nodeObj),
+						},
 					};
 				});
-
-				const LAYER_COLORS: Record<string, string> = {
-					'import:internal': '#5c7cfa',
-					'import:cross-package': '#f4a261',
-					'style:class': '#c084fc',
-					'style:token': '#2dd4bf',
-					'style:mixin': '#f472b6',
-					renders: '#5c7cfa',
-					reads: '#2dd4bf',
-					writes: '#f4a261',
-					calls: '#a78bfa',
-					commands: '#fbbf24',
-					ipc: '#f472b6',
-					navigates: '#4ade80',
-					violation: '#ef4444'
-				};
 
 				const edgesOut = edges
 					.filter((e) => {
@@ -145,7 +124,7 @@
 						return (e.weight ?? 1) >= graphState.minWeight;
 					})
 					.map((e) => {
-						const color = LAYER_COLORS[e.layer] ?? '#8b93a7';
+						const color = e.color ?? '#8b93a7';
 						const isOnFlow = activeFlow && onPath.has(e.source) && onPath.has(e.target);
 						return {
 							id: e.id,
@@ -153,7 +132,7 @@
 							target: e.target,
 							label: e.label,
 							animated: isOnFlow,
-							style: `stroke: ${isOnFlow ? '#ffd166' : color}; stroke-width: ${isOnFlow ? 3 : Math.min(4, 1 + Math.log2(e.weight || 1))}px; opacity: ${activeFlow && !isOnFlow ? 0.1 : 0.8};`
+							style: `stroke: ${isOnFlow ? '#ffd166' : color}; stroke-width: ${isOnFlow ? 3 : Math.min(4, 1 + Math.log2(e.weight || 1))}px; opacity: ${activeFlow && !isOnFlow ? 0.1 : 0.8};`,
 						};
 					});
 
@@ -168,7 +147,7 @@
 	});
 </script>
 
-<div class="flow-container">
+<div class="graph-canvas relative wfull hfull">
 	<SvelteFlow nodes={flowNodes} edges={flowEdges} {nodeTypes} fitView minZoom={0.1} maxZoom={2.5}>
 		<Background variant={BackgroundVariant.Dots} gap={16} size={1} />
 		<Controls />
@@ -176,46 +155,9 @@
 	</SvelteFlow>
 
 	{#if isComputing}
-		<div class="computing-badge">
-			<div class="spinner"></div>
-			<span>Computing layout...</span>
+		<div class="graph-computing absolute row ycenter gap-2xs bg-popover border pad-x-2xs pad-y-3xs radius-md shadow-md text-xs">
+			<div class="spinner" aria-hidden="true"></div>
+			<span>Computing layout…</span>
 		</div>
 	{/if}
 </div>
-
-<style>
-	.flow-container {
-		width: 100%;
-		height: 100%;
-		position: relative;
-		background: var(--bg);
-	}
-	.computing-badge {
-		position: absolute;
-		top: 16px;
-		right: 16px;
-		z-index: 10;
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 6px 12px;
-		border-radius: var(--radius-sm);
-		background: var(--bg-panel);
-		border: 1px solid var(--border);
-		font-size: 11px;
-		color: var(--text-muted);
-	}
-	.spinner {
-		width: 12px;
-		height: 12px;
-		border: 2px solid var(--border);
-		border-top-color: var(--accent);
-		border-radius: 50%;
-		animation: spin 0.8s linear infinite;
-	}
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
-	}
-</style>

@@ -26,65 +26,63 @@
 </script>
 
 {#if node}
-	<aside class="inspector-drawer">
-		<div class="drawer-header">
-			<div class="title-box">
-				<span class="badge accent">{node.kind ?? 'node'}</span>
-				<h3>{node.label ?? node.id}</h3>
+	<aside class="node-inspector border-left box gap-3xs pad-sm overflow-y-auto" aria-label="Selected node details">
+		<header class="row ycenter xbetween gap-2xs border-bottom pad-bottom-2xs">
+			<div class="box gap-3xs grow min0">
+				<span class="badge">{node.kind ?? 'node'}</span>
+				<h3 class="text-sm weight-600 m-0 truncate">{node.label ?? node.id}</h3>
 			</div>
-			<button class="btn-close" onclick={() => graphState.clearSelection()}>✕</button>
-		</div>
+			<button class="button is-icon text-muted" onclick={() => graphState.clearSelection()} aria-label="Close node inspector">✕</button>
+		</header>
 
-		<div class="drawer-body">
+		<div class="box gap-3xs pad-y-2xs">
 			{#if node.sourceRef}
-				<div class="field-card">
-					<span class="field-label">Source Reference</span>
-					<div class="source-row">
-						<code class="source-code">{node.sourceRef}</code>
+				<div class="inspector-field card border pad-2xs box gap-3xs">
+					<span class="text-xs weight-600 tt-u text-muted">Source Reference</span>
+					<div class="row ycenter gap-2xs">
+						<code class="grow min0 text-xs">{node.sourceRef}</code>
 						<button
-							class="btn primary open-btn"
+							class="button primary text-xs shrink-0"
 							disabled={isOpening}
 							onclick={() => openInEditor(node.sourceRef)}
-						>
-							{isOpening ? 'Opening...' : 'Open in Editor ↗'}
-						</button>
+						>{isOpening ? 'Opening…' : 'Open in Editor ↗'}</button>
 					</div>
 				</div>
 			{/if}
 
 			{#if node.detail}
-				<div class="field-card">
-					<span class="field-label">Description</span>
-					<p class="field-val">{node.detail}</p>
+				<div class="inspector-field card border pad-2xs box gap-3xs">
+					<span class="text-xs weight-600 tt-u text-muted">Description</span>
+					<p class="text-sm text-secondary m-0">{node.detail}</p>
 				</div>
 			{/if}
 
 			{#if node.data}
-				<div class="field-card">
-					<span class="field-label">Metrics</span>
+				<div class="inspector-field card border pad-2xs box gap-3xs">
+					<span class="text-xs weight-600 tt-u text-muted">Metrics</span>
 					<div class="metrics-grid">
 						{#if node.data.loc !== undefined}
-							<div class="metric-item">
-								<span class="m-val">{(node.data.loc || 0).toLocaleString()}</span>
-								<span class="m-lbl">LOC</span>
+							<div class="inspector-metric box gap-3xs">
+								<span class="text-md weight-600">{(node.data.loc || 0).toLocaleString()}</span>
+								<span class="text-xs text-muted">LOC</span>
 							</div>
 						{/if}
 						{#if node.data.files !== undefined}
-							<div class="metric-item">
-								<span class="m-val">{node.data.files}</span>
-								<span class="m-lbl">Files</span>
+							<div class="inspector-metric box gap-3xs">
+								<span class="text-md weight-600">{node.data.files}</span>
+								<span class="text-xs text-muted">Files</span>
 							</div>
 						{/if}
 						{#if node.data.commits !== undefined}
-							<div class="metric-item">
-								<span class="m-val">{node.data.commits}</span>
-								<span class="m-lbl">Commits</span>
+							<div class="inspector-metric box gap-3xs">
+								<span class="text-md weight-600">{node.data.commits}</span>
+								<span class="text-xs text-muted">Commits</span>
 							</div>
 						{/if}
 						{#if node.data.linesChanged !== undefined}
-							<div class="metric-item">
-								<span class="m-val">{(node.data.linesChanged || 0).toLocaleString()}</span>
-								<span class="m-lbl">Churn</span>
+							<div class="inspector-metric box gap-3xs">
+								<span class="text-md weight-600">{(node.data.linesChanged || 0).toLocaleString()}</span>
+								<span class="text-xs text-muted">Churn</span>
 							</div>
 						{/if}
 					</div>
@@ -92,18 +90,17 @@
 			{/if}
 
 			{#if node.data?.defines}
-				<div class="field-card">
-					<span class="field-label">Style Definitions</span>
-					<div class="style-stats">
-						<span class="badge">{node.data.defines.classes ?? 0} classes</span>
-						<span class="badge">{node.data.defines.tokens ?? 0} tokens</span>
+				<div class="inspector-field card border pad-2xs box gap-3xs">
+					<span class="text-xs weight-600 tt-u text-muted">Style Definitions</span>
+					<div class="row gap-2xs wrap">
+						<span class="badge text-xs">{node.data.defines.classes ?? 0} classes</span>
+						<span class="badge text-xs">{node.data.defines.tokens ?? 0} tokens</span>
 					</div>
-
 					{#if node.data.defines.consumedBy && node.data.defines.consumedBy.length > 0}
-						<span class="field-sublabel">Consumed by (Blast Radius):</span>
-						<ul class="consumed-list">
+						<span class="text-xs text-muted">Consumed by (Blast Radius)</span>
+						<ul class="reset-list box gap-3xs">
 							{#each node.data.defines.consumedBy as consumer}
-								<li><code>{consumer}</code></li>
+								<li class="text-xs pad-x-2xs"><code>{consumer}</code></li>
 							{/each}
 						</ul>
 					{/if}
@@ -111,22 +108,21 @@
 			{/if}
 
 			{#if node.data?.styles}
-				<div class="field-card">
-					<span class="field-label">Styles Applied</span>
+				<div class="inspector-field card border pad-2xs box gap-3xs">
+					<span class="text-xs weight-600 tt-u text-muted">Styles Applied</span>
 					{#if node.data.styles.authored && node.data.styles.authored.length > 0}
-						<span class="field-sublabel">Authored Classes:</span>
-						<div class="tags-wrap">
+						<span class="text-xs text-muted">Authored Classes</span>
+						<div class="row gap-2xs wrap">
 							{#each node.data.styles.authored as c}
-								<span class="tag">.{c.name} <small>({c.count})</small></span>
+								<span class="badge">.{c.name} <small>({c.count})</small></span>
 							{/each}
 						</div>
 					{/if}
-
 					{#if node.data.styles.tokens && node.data.styles.tokens.length > 0}
-						<span class="field-sublabel">Tokens:</span>
-						<div class="tags-wrap">
+						<span class="text-xs text-muted">Tokens</span>
+						<div class="row gap-2xs wrap">
 							{#each node.data.styles.tokens as t}
-								<span class="tag token">{t.name} <small>({t.count})</small></span>
+								<span class="badge">.{t.name} <small>({t.count})</small></span>
 							{/each}
 						</div>
 					{/if}
@@ -135,155 +131,3 @@
 		</div>
 	</aside>
 {/if}
-
-<style>
-	.inspector-drawer {
-		position: absolute;
-		top: 16px;
-		right: 16px;
-		bottom: 16px;
-		width: 340px;
-		max-width: calc(100vw - 32px);
-		background: var(--bg-panel);
-		border: 1px solid var(--border);
-		border-radius: var(--radius-md);
-		box-shadow: var(--shadow-card);
-		z-index: 25;
-		display: flex;
-		flex-direction: column;
-		overflow: hidden;
-	}
-	.drawer-header {
-		padding: 14px 16px;
-		border-bottom: 1px solid var(--border);
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-	}
-	.title-box {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-		overflow: hidden;
-	}
-	.title-box h3 {
-		font-size: 13px;
-		font-weight: 600;
-		color: var(--text-primary);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.btn-close {
-		all: unset;
-		cursor: pointer;
-		color: var(--text-muted);
-		font-size: 12px;
-		padding: 4px 8px;
-		border-radius: var(--radius-sm);
-		&:hover {
-			background: var(--bg-hover);
-			color: var(--text-primary);
-		}
-	}
-	.drawer-body {
-		padding: 16px;
-		overflow-y: auto;
-		display: flex;
-		flex-direction: column;
-		gap: 12px;
-	}
-	.field-card {
-		background: var(--bg-surface);
-		padding: 12px;
-		border-radius: var(--radius-sm);
-		border: 1px solid var(--border-subtle);
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
-	}
-	.field-label {
-		font-size: 10px;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--text-muted);
-		font-weight: 600;
-	}
-	.field-sublabel {
-		font-size: 11px;
-		color: var(--text-muted);
-		margin-top: 4px;
-	}
-	.field-val {
-		font-size: 12px;
-		color: var(--text-primary);
-		line-height: 1.4;
-	}
-	.source-row {
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
-	}
-	.source-code {
-		font-size: 11px;
-		color: var(--accent);
-		word-break: break-all;
-	}
-	.open-btn {
-		width: 100%;
-		font-size: 11px;
-		padding: 5px 8px;
-	}
-	.metrics-grid {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 8px;
-		margin-top: 4px;
-	}
-	.metric-item {
-		display: flex;
-		flex-direction: column;
-		background: var(--bg-panel);
-		padding: 6px 8px;
-		border-radius: 4px;
-	}
-	.m-val {
-		font-size: 13px;
-		font-weight: 600;
-		color: var(--text-primary);
-	}
-	.m-lbl {
-		font-size: 10px;
-		color: var(--text-muted);
-	}
-	.style-stats {
-		display: flex;
-		gap: 6px;
-	}
-	.consumed-list {
-		list-style: none;
-		display: flex;
-		flex-direction: column;
-		gap: 3px;
-		font-size: 11px;
-	}
-	.consumed-list code {
-		color: var(--pink);
-	}
-	.tags-wrap {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 4px;
-	}
-	.tag {
-		font-size: 10px;
-		padding: 2px 6px;
-		border-radius: 4px;
-		background: var(--bg-panel);
-		color: var(--purple);
-		border: 1px solid var(--border);
-	}
-	.tag.token {
-		color: var(--cyan);
-	}
-</style>

@@ -1082,6 +1082,433 @@ mark.mdv-search-active
 .max-w-measure
 	max-width: min(100%, 45rem)
 
+
+// ---------------------------------------------------------------------------
+// Observatory — workspace chrome for the analytics view.
+// All atoms here are pure compositions of fractalstyler2 primitives + tokens.
+// The data viz itself (graph, treemap, canvas) reads its own --vars.
+// ---------------------------------------------------------------------------
+
+// --- Observatory shell chrome ---
+.observatory-header
+	z-index: var(--z-sticky)
+	top: var(--header-height)
+
+.observatory-tab
+	display: inline-flex
+	align-items: center
+	justify-content: center
+	height: var(--control-h-md)
+	padding: 0 var(--space-sm)
+	background: transparent
+	border: none
+	color: var(--text-secondary)
+	font-size: var(--text-sm)
+	font-weight: 500
+	cursor: pointer
+	transition: background var(--motion-fast) ease, color var(--motion-fast) ease
+	border-bottom: 2px solid transparent
+	&:hover
+		color: var(--text-primary)
+		background: var(--state-hover-subtle)
+	&.observatory-tab-active
+		color: var(--text-primary)
+		border-bottom-color: var(--theme-color)
+
+.observatory-sidebar
+	width: 280px
+	flex-shrink: 0
+
+// --- Sidebar atoms (left rail) ---
+.sidebar-tab
+	color: var(--text-secondary)
+	&.sidebar-tab-active
+		background: var(--state-hover-subtle)
+		color: var(--text-primary)
+		font-weight: 500
+
+.metric-tile
+	display: flex
+	flex-direction: column
+	align-items: center
+	justify-content: center
+	gap: var(--space-3xs)
+	text-align: center
+	&.metric-tile-num
+		font-size: var(--text-md)
+		font-weight: 600
+		color: var(--text-primary)
+	&.metric-tile-lbl
+		font-size: var(--text-xs)
+		color: var(--text-muted)
+
+// --- Day card (logs list) ---
+.day-card
+	background: transparent
+	border: 1px solid transparent
+	&.day-card-active
+		background: var(--state-hover-subtle)
+		border-color: var(--border)
+
+// Day-stat color tiers (the only color commentary in the logs view)
+.day-stat
+	font-size: var(--text-xs)
+	padding: 2px var(--space-3xs)
+	border-radius: 0
+	font-variant-numeric: tabular-nums
+.day-stat-commits
+	background: color-mix(in srgb, var(--success) 12%, transparent)
+	color: var(--success)
+.day-stat-sessions
+	background: color-mix(in srgb, var(--theme-color) 12%, transparent)
+	color: var(--theme-color)
+.day-stat-browsing
+	background: color-mix(in srgb, var(--info) 12%, transparent)
+	color: var(--info)
+
+// --- Calendar cell (logs calendar) ---
+.cal-card
+	min-height: 280px
+.cal-weekdays
+	margin-bottom: var(--space-3xs)
+	span
+		padding: var(--space-3xs) 0
+.cal-cell
+	min-height: 32px
+	background: transparent
+	border: 1px solid transparent
+	cursor: pointer
+	transition: background var(--motion-fast) ease
+	&:hover
+		background: var(--state-hover-subtle)
+	&.cal-cell-active
+		background: var(--bg-raised)
+		border-color: var(--theme-color)
+	&.cal-cell-empty
+		visibility: hidden
+
+.cal-cell-activity
+	.cal-dot
+		display: inline-block
+		width: 5px
+		height: 5px
+		border-radius: 0
+
+.cal-dot-commit
+	background: var(--success)
+.cal-dot-agent
+	background: var(--theme-color)
+.cal-dot-browse
+	background: var(--info)
+
+// --- Filter tab active state ---
+.button-primary
+	background: var(--theme-color)
+	color: var(--text-inverse)
+	border-color: var(--theme-color)
+
+// --- Status dot (footer) ---
+.status-dot
+	width: 8px
+	height: 8px
+	border-radius: 0
+	background: var(--text-muted)
+	display: inline-block
+	&.status-dot-ok, .status-dot.ok
+		background: var(--success)
+
+// --- App header (observatory chrome) ---
+.appheader-active
+	color: var(--theme-color)
+
+// --- BoxNode (graph canvas) ---
+.boxnode
+	background: var(--bg)
+	border: 1px solid var(--border)
+	color: var(--text-primary)
+	font-size: var(--text-xs)
+	padding: var(--space-2xs) var(--space-xs)
+	display: flex
+	flex-direction: column
+	gap: var(--space-3xs)
+	overflow: hidden
+	position: relative
+	transition: border-color var(--motion-fast) ease, background var(--motion-fast) ease
+.boxnode-header
+	display: flex
+	align-items: center
+	gap: var(--space-2xs)
+	min-width: 0
+.boxnode-label
+	flex: 1
+	min-width: 0
+	overflow: hidden
+	text-overflow: ellipsis
+	white-space: nowrap
+	font-weight: 500
+.boxnode-chev
+	width: 18px
+	height: 18px
+	display: inline-flex
+	align-items: center
+	justify-content: center
+	background: transparent
+	border: none
+	color: var(--text-muted)
+	cursor: pointer
+.boxnode-ic, .boxnode-dot
+	width: 14px
+	height: 14px
+	display: inline-flex
+	align-items: center
+	justify-content: center
+	font-size: var(--text-xs)
+	color: var(--text-muted)
+.boxnode-dot
+	width: 6px
+	height: 6px
+	border-radius: 50%
+	background: var(--text-muted)
+.boxnode-badge
+	display: inline-flex
+	align-items: center
+	gap: 2px
+	font-size: var(--text-3xs)
+	padding: 1px var(--space-3xs)
+	background: var(--bg-raised)
+	border: 1px solid var(--border)
+	border-radius: 0
+.boxnode-u
+	color: var(--text-muted)
+.boxnode-rolled
+	font-size: var(--text-3xs)
+	color: var(--text-muted)
+	padding: 0 var(--space-xs)
+.boxnode-collapsed
+	background: var(--bg-raised)
+.boxnode-leaf
+	background: var(--bg)
+.boxnode-lane
+	background: var(--bg-raised)
+	border-style: dashed
+	border-color: var(--border)
+.boxnode-dim
+	opacity: 0.25
+.boxnode-match
+	border-color: var(--theme-color)
+	border-width: 2px
+.boxnode-step
+	border-color: var(--theme-color)
+.boxnode-stepno
+	position: absolute
+	top: 4px
+	right: 4px
+	font-size: var(--text-3xs)
+	font-weight: 600
+	color: var(--theme-color)
+.boxnode-selected
+	border-color: var(--theme-color)
+	border-width: 2px
+	box-shadow: 0 0 0 2px color-mix(in srgb, var(--theme-color) 20%, transparent)
+
+// Kind-coloring via HSL hue var
+.boxnode-kind-stylesheet
+	border-left: 3px solid hsl(var(--hue, 210), 70%, 60%)
+.boxnode-kind-style
+	border-left: 3px solid hsl(var(--hue, 210), 70%, 60%)
+.boxnode-kind-token
+	border-left: 3px solid hsl(var(--hue, 210), 70%, 60%)
+.boxnode-kind-component
+	border-left: 3px solid hsl(var(--hue, 210), 70%, 60%)
+	background: color-mix(in srgb, hsl(var(--hue, 210), 70%, 60%) 6%, var(--bg))
+.boxnode-kind-layer
+	border-left: 3px solid hsl(var(--hue, 210), 70%, 60%)
+	background: color-mix(in srgb, hsl(var(--hue, 210), 70%, 60%) 6%, var(--bg))
+.boxnode-kind-model
+	border-left: 3px solid hsl(var(--hue, 210), 70%, 60%)
+	background: color-mix(in srgb, hsl(var(--hue, 210), 70%, 60%) 6%, var(--bg))
+.boxnode-kind-file
+	background: color-mix(in srgb, hsl(var(--hue, 210), 70%, 60%) 6%, var(--bg))
+.boxnode-kind-stylesheet
+	background: color-mix(in srgb, hsl(var(--hue, 210), 70%, 60%) 6%, var(--bg))
+
+// --- Graph canvas shell ---
+.graph-canvas
+	background: var(--bg)
+.graph-computing
+	top: var(--space-sm)
+	right: var(--space-sm)
+	z-index: var(--z-raised)
+
+// --- Treemap canvas ---
+.treemap-canvas
+	width: 100%
+	height: 100%
+.treemap-svg
+	background: var(--bg)
+	border: 1px solid var(--border)
+	overflow: hidden
+.treemap-group-box
+	fill: var(--bg-raised)
+	stroke: var(--border)
+	stroke-width: 1
+.treemap-group-label
+	fill: var(--text-muted)
+	font-size: 10px
+	font-family: var(--font-mono)
+.treemap-file-box
+	fill-opacity: 0.2
+	stroke-width: 1.5
+	cursor: pointer
+	transition: stroke-opacity var(--motion-fast) ease
+.treemap-file-label
+	fill: var(--text-primary)
+	font-size: 9px
+	font-family: var(--font-mono)
+	pointer-events: none
+
+// Heatmap color tiers (routed through tokens)
+.treemap-tier-low .treemap-file-box
+	fill: var(--success)
+	stroke: var(--success)
+.treemap-tier-mid .treemap-file-box
+	fill: var(--warning)
+	stroke: var(--warning)
+.treemap-tier-high .treemap-file-box
+	fill: color-mix(in srgb, var(--warning) 50%, var(--danger))
+	stroke: color-mix(in srgb, var(--warning) 50%, var(--danger))
+.treemap-tier-peak .treemap-file-box
+	fill: var(--danger)
+	stroke: var(--danger)
+.treemap-match .treemap-file-box
+	stroke-width: 3
+	stroke: var(--theme-color)
+.treemap-selected .treemap-file-box
+	stroke-width: 3
+	stroke: var(--theme-color)
+.treemap-legend-bar
+	width: 80px
+	height: 8px
+	background: linear-gradient(to right, var(--success), var(--warning), var(--danger))
+	border: 1px solid var(--border)
+.treemap-legend-label
+	color: var(--text-muted)
+
+// --- Flow player ---
+.flow-player
+	background: var(--bg)
+	max-width: min(100%, 32rem)
+.trigger-code
+	font-family: var(--font-mono)
+	font-size: var(--text-xs)
+	background: var(--bg-raised)
+	padding: 2px var(--space-3xs)
+	border: 1px solid var(--border)
+
+// --- Node inspector ---
+.node-inspector
+	width: 360px
+	flex-shrink: 0
+	max-height: 100%
+.inspector-field
+	background: var(--bg)
+.inspector-metric
+	background: var(--bg)
+	padding: var(--space-2xs)
+	border: 1px solid var(--border-subtle)
+	text-align: center
+
+// --- Observatory project shell (canvas + sidebar) ---
+.observatory-project
+	min-height: 100%
+.observatory-canvas
+	position: relative
+	min-width: 0
+
+// --- Logs page shell ---
+.logs-page
+	min-height: 100%
+.logs-sidebar
+	width: 320px
+	flex-shrink: 0
+	max-height: 100%
+.timeline-pane
+	min-width: 0
+	min-height: 100%
+
+// --- Timeline item (activity stream) ---
+.timeline-item
+	background: transparent
+	border-radius: 0
+	transition: background var(--motion-fast) ease
+	&:hover
+		background: var(--state-hover-subtle)
+.timeline-icon
+	font-size: var(--text-md)
+	width: 24px
+	text-align: center
+
+// --- Preset swatches (theme picker) ---
+.preset-swatch
+	width: 32px
+	height: 32px
+	border-radius: 0
+	border: 1px solid var(--border)
+.preset-btn-active
+	background: var(--state-hover)
+	border: 1px solid var(--theme-color)
+
+.accent-swatch
+	width: 24px
+	height: 24px
+	border-radius: 50%
+	border: 2px solid transparent
+	cursor: pointer
+	transition: border-color var(--motion-fast) ease
+	&.accent-swatch-active
+		border-color: var(--text-primary)
+
+.custom-color-picker
+	width: 32px
+	height: 32px
+	border: 1px solid var(--border)
+	border-radius: 0
+	padding: 0
+	cursor: pointer
+
+// --- Spinner ---
+.spinner
+	width: 18px
+	height: 18px
+	border: 2px solid var(--border)
+	border-top-color: var(--theme-color)
+	border-radius: 50%
+	animation: spin 0.8s linear infinite
+	display: inline-block
+
+@keyframes spin
+	to
+		transform: rotate(360deg)
+
+// --- Badge color tiers ---
+.badge-danger
+	background: color-mix(in srgb, var(--danger) 12%, transparent)
+	color: var(--danger)
+	border-color: color-mix(in srgb, var(--danger) 25%, transparent)
+.badge-warn
+	background: color-mix(in srgb, var(--warning) 12%, transparent)
+	color: var(--warning)
+	border-color: color-mix(in srgb, var(--warning) 25%, transparent)
+.badge-success
+	background: color-mix(in srgb, var(--success) 12%, transparent)
+	color: var(--success)
+	border-color: color-mix(in srgb, var(--success) 25%, transparent)
+.badge-accent
+	background: color-mix(in srgb, var(--theme-color) 12%, transparent)
+	color: var(--theme-color)
+	border-color: color-mix(in srgb, var(--theme-color) 25%, transparent)
+
+
 // ---------------------------------------------------------------------------
 // Print — hide workspace chrome, keep only the article
 // ---------------------------------------------------------------------------

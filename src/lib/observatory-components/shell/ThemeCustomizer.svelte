@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { themeState, THEME_PRESETS } from '$lib/observatory-state/theme.svelte';
+	import { themeState } from '$lib/observatory-state/theme.svelte';
 
 	const ACCENT_COLORS = [
 		{ name: 'Blue', val: '#58a6ff' },
@@ -8,13 +8,38 @@
 		{ name: 'Solar', val: '#d29922' },
 		{ name: 'Pink', val: '#f778ba' },
 		{ name: 'Cyan', val: '#39d2c0' },
-		{ name: 'Sky', val: '#38bdf8' }
+		{ name: 'Sky', val: '#38bdf8' },
+	];
+
+	type PresetId = 'obsidian' | 'pitch' | 'slate' | 'paper';
+	type FontId = 'mono' | 'sans' | 'serif';
+	type ShadowId = 'none' | 'subtle' | 'card' | 'glow';
+
+	const PRESETS: Array<{ id: PresetId; name: string; bg: string; border: string }> = [
+		{ id: 'obsidian', name: 'Obsidian', bg: '#0d1117', border: '#30363d' },
+		{ id: 'pitch', name: 'Pitch Black', bg: '#000000', border: '#262626' },
+		{ id: 'slate', name: 'Slate Dark', bg: '#0f172a', border: '#475569' },
+		{ id: 'paper', name: 'Warm Paper', bg: '#faf8f5', border: '#e2dcd4' },
+	];
+
+	const FONTS: Array<{ id: FontId; label: string }> = [
+		{ id: 'mono', label: 'Monospace' },
+		{ id: 'sans', label: 'Inter / Sans' },
+		{ id: 'serif', label: 'Editorial Serif' },
+	];
+
+	const RADII = [0, 4, 8, 12];
+	const SHADOWS: Array<{ id: ShadowId; label: string }> = [
+		{ id: 'none', label: 'Flat' },
+		{ id: 'subtle', label: 'Subtle' },
+		{ id: 'card', label: 'Card' },
+		{ id: 'glow', label: 'Glow ✨' },
 	];
 </script>
 
 {#if themeState.isCustomizerOpen}
 	<div
-		class="customizer-backdrop"
+		class="dialog-backdrop fixed inset-0 box ycenter xcenter pad-top-2xl z-modal"
 		role="dialog"
 		aria-modal="true"
 		aria-label="Theme and token customizer"
@@ -22,67 +47,42 @@
 		onkeydown={(e) => e.key === 'Escape' && themeState.toggleCustomizer()}
 		tabindex="-1"
 	>
-		<div class="customizer-panel" role="document">
-			<div class="panel-header">
-				<div class="header-title">
-					<span class="ico">🎨</span>
-					<h3>Theme & Token Customizer</h3>
+		<div class="dialog-card card radius-lg bg-dialog border shadow-lg box dialog-md dialog-theme-customizer">
+			<header class="dialog-header row ycenter xbetween pad-x-sm pad-y-xs border-bottom">
+				<div class="row ycenter gap-2xs">
+					<span>🎨</span>
+					<h3 class="text-md weight-600 m-0">Theme & Token Customizer</h3>
 				</div>
-				<button class="btn-close" onclick={() => themeState.toggleCustomizer()}>✕</button>
-			</div>
+				<button class="button is-icon text-muted" onclick={() => themeState.toggleCustomizer()} aria-label="Close theme customizer">✕</button>
+			</header>
 
-			<div class="panel-body">
+			<div class="dialog-body box gap-md pad-x-sm pad-y-sm overflow-y-auto">
 				<!-- Presets -->
-				<div class="control-group">
-					<span class="group-title">Background Presets</span>
-					<div class="presets-grid">
-						<button
-							class="preset-btn"
-							class:active={themeState.config.preset === 'obsidian'}
-							onclick={() => themeState.setPreset('obsidian')}
-						>
-							<div class="swatch" style="background: #0d1117; border: 1px solid #30363d;"></div>
-							<span>Obsidian</span>
-						</button>
-
-						<button
-							class="preset-btn"
-							class:active={themeState.config.preset === 'pitch'}
-							onclick={() => themeState.setPreset('pitch')}
-						>
-							<div class="swatch" style="background: #000000; border: 1px solid #262626;"></div>
-							<span>Pitch Black</span>
-						</button>
-
-						<button
-							class="preset-btn"
-							class:active={themeState.config.preset === 'slate'}
-							onclick={() => themeState.setPreset('slate')}
-						>
-							<div class="swatch" style="background: #0f172a; border: 1px solid #475569;"></div>
-							<span>Slate Dark</span>
-						</button>
-
-						<button
-							class="preset-btn"
-							class:active={themeState.config.preset === 'paper'}
-							onclick={() => themeState.setPreset('paper')}
-						>
-							<div class="swatch" style="background: #faf8f5; border: 1px solid #e2dcd4;"></div>
-							<span>Warm Paper</span>
-						</button>
+				<section class="box gap-2xs">
+					<span class="text-xs tt-u weight-600 text-muted">Background Presets</span>
+					<div class="grid-2 gap-2xs">
+						{#each PRESETS as p}
+							<button
+								class="preset-btn box gap-2xs pad-2xs text-sm cursor-pointer"
+								class:preset-btn-active={themeState.config.preset === p.id}
+								onclick={() => themeState.setPreset(p.id)}
+							>
+								<div class="preset-swatch border shrink-0" style="background: {p.bg}; --swatch-border: {p.border};"></div>
+								<span class="grow min0 text-left">{p.name}</span>
+							</button>
+						{/each}
 					</div>
-				</div>
+				</section>
 
-				<!-- Accent Color Swatches -->
-				<div class="control-group">
-					<span class="group-title">Accent Color</span>
-					<div class="accents-row">
+				<!-- Accent -->
+				<section class="box gap-2xs">
+					<span class="text-xs tt-u weight-600 text-muted">Accent Color</span>
+					<div class="row wrap gap-2xs">
 						{#each ACCENT_COLORS as color}
 							<button
-								class="color-circle"
-								class:active={themeState.config.accent === color.val}
-								style="background: {color.val};"
+								class="accent-swatch"
+								class:accent-swatch-active={themeState.config.accent === color.val}
+								style="--swatch-color: {color.val};"
 								title={color.name}
 								onclick={() => themeState.setAccent(color.val)}
 							></button>
@@ -95,229 +95,50 @@
 							title="Custom Color"
 						/>
 					</div>
-				</div>
+				</section>
 
-				<!-- Typography Engine -->
-				<div class="control-group">
-					<span class="group-title">Typography</span>
-					<div class="btn-group">
-						<button
-							class="btn opt-btn"
-							class:active={themeState.config.fontFamily === 'mono'}
-							onclick={() => themeState.setFont('mono')}
-						>
-							Monospace
-						</button>
-						<button
-							class="btn opt-btn"
-							class:active={themeState.config.fontFamily === 'sans'}
-							onclick={() => themeState.setFont('sans')}
-						>
-							Inter / Sans
-						</button>
-						<button
-							class="btn opt-btn"
-							class:active={themeState.config.fontFamily === 'serif'}
-							onclick={() => themeState.setFont('serif')}
-						>
-							Editorial Serif
-						</button>
+				<!-- Typography -->
+				<section class="box gap-2xs">
+					<span class="text-xs tt-u weight-600 text-muted">Typography</span>
+					<div class="row gap-2xs">
+						{#each FONTS as font}
+							<button
+								class="button small ghost text-xs grow min0"
+								class:button-primary={themeState.config.fontFamily === font.id}
+								onclick={() => themeState.setFont(font.id)}
+							>{font.label}</button>
+						{/each}
 					</div>
-				</div>
+				</section>
 
-				<!-- Border Radius -->
-				<div class="control-group">
-					<span class="group-title">Border Radius</span>
-					<div class="btn-group">
-						<button
-							class="btn opt-btn"
-							class:active={themeState.config.borderRadius === 0}
-							onclick={() => themeState.setRadius(0)}>0px</button
-						>
-						<button
-							class="btn opt-btn"
-							class:active={themeState.config.borderRadius === 4}
-							onclick={() => themeState.setRadius(4)}>4px</button
-						>
-						<button
-							class="btn opt-btn"
-							class:active={themeState.config.borderRadius === 8}
-							onclick={() => themeState.setRadius(8)}>8px</button
-						>
-						<button
-							class="btn opt-btn"
-							class:active={themeState.config.borderRadius === 12}
-							onclick={() => themeState.setRadius(12)}>12px</button
-						>
+				<!-- Border radius -->
+				<section class="box gap-2xs">
+					<span class="text-xs tt-u weight-600 text-muted">Border Radius</span>
+					<div class="row gap-2xs">
+						{#each RADII as r}
+							<button
+								class="button small ghost text-xs grow min0"
+								class:button-primary={themeState.config.borderRadius === r}
+								onclick={() => themeState.setRadius(r)}
+							>{r}px</button>
+						{/each}
 					</div>
-				</div>
+				</section>
 
-				<!-- Shadow Elevation -->
-				<div class="control-group">
-					<span class="group-title">Card Shadow & Glow</span>
-					<div class="btn-group">
-						<button
-							class="btn opt-btn"
-							class:active={themeState.config.shadowLevel === 'none'}
-							onclick={() => themeState.setShadow('none')}>Flat</button
-						>
-						<button
-							class="btn opt-btn"
-							class:active={themeState.config.shadowLevel === 'subtle'}
-							onclick={() => themeState.setShadow('subtle')}>Subtle</button
-						>
-						<button
-							class="btn opt-btn"
-							class:active={themeState.config.shadowLevel === 'card'}
-							onclick={() => themeState.setShadow('card')}>Card</button
-						>
-						<button
-							class="btn opt-btn"
-							class:active={themeState.config.shadowLevel === 'glow'}
-							onclick={() => themeState.setShadow('glow')}>Glow ✨</button
-						>
+				<!-- Shadow -->
+				<section class="box gap-2xs">
+					<span class="text-xs tt-u weight-600 text-muted">Card Shadow & Glow</span>
+					<div class="row gap-2xs">
+						{#each SHADOWS as s}
+							<button
+								class="button small ghost text-xs grow min0"
+								class:button-primary={themeState.config.shadowLevel === s.id}
+								onclick={() => themeState.setShadow(s.id)}
+							>{s.label}</button>
+						{/each}
 					</div>
-				</div>
+				</section>
 			</div>
 		</div>
 	</div>
 {/if}
-
-<style>
-	.customizer-backdrop {
-		position: fixed;
-		inset: 0;
-		background: rgba(0, 0, 0, 0.4);
-		backdrop-filter: blur(2px);
-		z-index: 60;
-		display: flex;
-		justify-content: flex-end;
-	}
-	.customizer-panel {
-		background: var(--bg-panel);
-		border-left: 1px solid var(--border);
-		width: 320px;
-		height: 100%;
-		box-shadow: var(--shadow-float);
-		display: flex;
-		flex-direction: column;
-		overflow-y: auto;
-	}
-	.panel-header {
-		padding: 16px;
-		border-bottom: 1px solid var(--border);
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-	}
-	.header-title {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-	}
-	.header-title h3 {
-		font-size: 13px;
-		color: var(--text-primary);
-	}
-	.btn-close {
-		all: unset;
-		cursor: pointer;
-		color: var(--text-muted);
-		padding: 4px 8px;
-		border-radius: var(--radius-sm);
-		&:hover {
-			background: var(--bg-hover);
-			color: var(--text-primary);
-		}
-	}
-	.panel-body {
-		padding: 16px;
-		display: flex;
-		flex-direction: column;
-		gap: 16px;
-	}
-	.control-group {
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-	}
-	.group-title {
-		font-size: 10px;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--text-muted);
-		font-weight: 600;
-	}
-	.presets-grid {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 6px;
-	}
-	.preset-btn {
-		all: unset;
-		cursor: pointer;
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 6px 10px;
-		border-radius: var(--radius-sm);
-		border: 1px solid var(--border-subtle);
-		background: var(--bg-surface);
-		font-size: 11px;
-		color: var(--text-primary);
-		transition: all 0.15s;
-		&:hover {
-			background: var(--bg-hover);
-			border-color: var(--border);
-		}
-		&.active {
-			border-color: var(--accent);
-			background: var(--accent-glow);
-		}
-	}
-	.swatch {
-		width: 14px;
-		height: 14px;
-		border-radius: 3px;
-		flex: none;
-	}
-	.accents-row {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-	}
-	.color-circle {
-		all: unset;
-		cursor: pointer;
-		width: 22px;
-		height: 22px;
-		border-radius: 50%;
-		border: 2px solid transparent;
-		transition: transform 0.15s;
-		&:hover {
-			transform: scale(1.15);
-		}
-		&.active {
-			border-color: var(--text-primary);
-			transform: scale(1.15);
-		}
-	}
-	.custom-color-picker {
-		width: 24px;
-		height: 24px;
-		border: none;
-		border-radius: 50%;
-		cursor: pointer;
-		background: transparent;
-	}
-	.btn-group {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
-		gap: 4px;
-	}
-	.opt-btn {
-		font-size: 11px;
-		padding: 6px 4px;
-		text-align: center;
-	}
-</style>

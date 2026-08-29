@@ -1,7 +1,12 @@
 <script lang="ts">
 	import { graphState } from '$lib/observatory-state/graph.svelte';
 
-	let { scan, selected, query, onselect }: { scan: any; selected?: any; query?: string; onselect?: (item: any) => void } = $props();
+	let { scan, selected, query, onselect }: {
+		scan: any;
+		selected?: any;
+		query?: string;
+		onselect?: (item: any) => void;
+	} = $props();
 
 	const files: any[] = $derived(scan?.files ?? []);
 
@@ -42,7 +47,7 @@
 			kind: 'file',
 			sourceRef: `${b.path}:1`,
 			detail: `${b.loc} LOC · ${b.commits} commits · ${b.authors ?? 1} authors · Complexity ${b.complexity ?? 0}`,
-			data: { loc: b.loc, commits: b.commits, linesChanged: b.linesChanged, authors: b.authors }
+			data: { loc: b.loc, commits: b.commits, linesChanged: b.linesChanged, authors: b.authors },
 		});
 	}
 
@@ -109,134 +114,61 @@
 			if (iw < 12 || ih < 12) continue;
 			const inner = squarify(
 				g.files.map((f: any) => ({ ...f, value: Math.max(f.loc, 1) })).sort((a: any, b: any) => b.value - a.value),
-				g.x + PAD,
-				g.y + HEAD,
-				iw,
-				ih
+				g.x + PAD, g.y + HEAD, iw, ih
 			);
 			for (const f of inner) all.push({ type: 'file', ...f });
 		}
 		return all;
 	});
 
-	const heat = (r: number) => {
-		if (r < 30) return '#2dd4bf'; // teal
-		if (r < 60) return '#eab308'; // amber
-		if (r < 85) return '#f97316'; // orange
-		return '#ef4444'; // red
-	};
+	// Token-routed heatmap: each color reads from a CSS variable the consumer
+	// has declared via a class hook (.treemap-tier-low etc.). The fill comes
+	// from a per-file CSS variable so the SVG can read it.
+	function tierClass(r: number): string {
+		if (r < 30) return 'treemap-tier-low';
+		if (r < 60) return 'treemap-tier-mid';
+		if (r < 85) return 'treemap-tier-high';
+		return 'treemap-tier-peak';
+	}
 </script>
 
-<div class="treemap-shell">
-	<div class="legend">
-		<span class="legend-title">Churn × Complexity Heatmap</span>
-		<div class="scale">
-			<span>Low Risk</span>
-			<div class="bar"></div>
-			<span>High Risk</span>
+<div class="treemap-canvas box gap-3xs pad-sm">
+	<!-- Legend -->
+	<header class="row ycenter xbetween pad-y-2xs text-xs text-secondary">
+		<span class="weight-600">Churn × Complexity Heatmap</span>
+		<div class="row ycenter gap-2xs text-3xs">
+			<span class="treemap-legend-label">Low Risk</span>
+			<div class="treemap-legend-bar"></div>
+			<span class="treemap-legend-label">High Risk</span>
 		</div>
-	</div>
+	</header>
 
-	<svg viewBox="0 0 {W} {H}" class="treemap-svg">
+	<svg viewBox="0 0 {W} {H}" class="treemap-svg wfull grow min0">
 		{#each boxes as b}
 			{#if b.type === 'group'}
-				<g class="group">
-					<rect x={b.x} y={b.y} width={b.w} height={b.h} class="group-box" />
-					<text x={b.x + 4} y={b.y + 12} class="group-label">{b.key}</text>
+				<g class="treemap-group">
+					<rect x={b.x} y={b.y} width={b.w} height={b.h} class="treemap-group-box" />
+					<text x={b.x + 4} y={b.y + 12} class="treemap-group-label">{b.key}</text>
 				</g>
 			{:else}
-				{@const fill = heat(b.risk ?? 0)}
 				{@const isMatch = query && b.path.toLowerCase().includes(query.toLowerCase())}
 				{@const isSel = selected?.path === b.path}
 				<g
-					class="file"
-					class:match={isMatch}
-					class:selected={isSel}
+					class="treemap-file {tierClass(b.risk ?? 0)}"
+					class:treemap-match={isMatch}
+					class:treemap-selected={isSel}
 					role="button"
 					tabindex="0"
-					aria-label={`${b.path}: ${b.loc} lines of code, ${b.commits} commits`}
+					aria-label="{b.path}: {b.loc} lines of code, {b.commits} commits"
 					onclick={() => selectFile(b)}
 					onkeydown={(e) => handleFileKeydown(e, b)}
 				>
-					<rect x={b.x} y={b.y} width={b.w} height={b.h} style="fill: {fill}33; stroke: {fill}" class="file-box" />
+					<rect x={b.x} y={b.y} width={b.w} height={b.h} class="treemap-file-box" />
 					{#if b.w > 40 && b.h > 18}
-						<text x={b.x + 4} y={b.y + 12} class="file-label">{b.path.split('/').pop()}</text>
+						<text x={b.x + 4} y={b.y + 12} class="treemap-file-label">{b.path.split('/').pop()}</text>
 					{/if}
 				</g>
 			{/if}
 		{/each}
 	</svg>
 </div>
-
-<style>
-	.treemap-shell {
-		width: 100%;
-		height: 100%;
-		display: flex;
-		flex-direction: column;
-		padding: 16px;
-		background: var(--bg);
-	}
-	.legend {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		margin-bottom: 12px;
-		font-size: 11px;
-		color: var(--text-muted);
-	}
-	.scale {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-	}
-	.scale .bar {
-		width: 120px;
-		height: 8px;
-		border-radius: 4px;
-		background: linear-gradient(to right, #2dd4bf, #eab308, #f97316, #ef4444);
-	}
-	.treemap-svg {
-		width: 100%;
-		height: 100%;
-		max-height: calc(100vh - 160px);
-		border-radius: var(--radius-md);
-		background: var(--bg-panel);
-		border: 1px solid var(--border);
-	}
-	.group-box {
-		fill: rgba(255, 255, 255, 0.02);
-		stroke: var(--border);
-		stroke-dasharray: 2 2;
-	}
-	.group-label {
-		font-size: 10px;
-		fill: var(--text-secondary);
-		font-weight: 600;
-	}
-	.file {
-		cursor: pointer;
-		transition: opacity 0.15s;
-	}
-	.file:hover .file-box {
-		filter: brightness(1.3);
-		stroke-width: 2px;
-	}
-	.file-box {
-		stroke-width: 1px;
-		transition: all 0.15s;
-	}
-	.file.selected .file-box {
-		stroke: var(--accent) !important;
-		stroke-width: 2px;
-	}
-	.file.match .file-box {
-		stroke: #ffd166 !important;
-		stroke-width: 2px;
-	}
-	.file-label {
-		font-size: 10px;
-		fill: var(--text-primary);
-		pointer-events: none;
-	}
-</style>

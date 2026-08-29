@@ -10,25 +10,26 @@
 	const projectSlug = $derived(page.params.project);
 
 	$effect(() => {
-		if (projectSlug) {
-			projectsState.loadScan(projectSlug, 'layout');
-		}
+		if (projectSlug) projectsState.loadScan(projectSlug, 'layout');
 	});
 </script>
 
-<div class="project-view-shell">
+<!--
+  Page type: project shell with persistent sidebar nav (Sidebar component)
+  and a main canvas area that hosts the graph/treemap/flow/inspector.
+-->
+<div class="observatory-project row grow min0 wfull">
 	<Sidebar />
-
-	<div class="canvas-area">
+	<div class="observatory-canvas grow min0">
 		{#if projectsState.isLoading}
-			<div class="loading-state">
-				<div class="spinner"></div>
-				<span>Loading project scan...</span>
+			<div class="box ycenter xcenter gap-sm pad-2xl">
+				<div class="spinner" aria-hidden="true"></div>
+				<span class="text-muted">Loading project scan…</span>
 			</div>
 		{:else if projectsState.error}
-			<div class="error-state">
-				<h3>Scan not found</h3>
-				<p>{projectsState.error}</p>
+			<div class="box ycenter xcenter gap-sm pad-2xl text-danger">
+				<h3 class="text-md weight-600 m-0">Scan not found</h3>
+				<p class="text-sm text-muted m-0">{projectsState.error}</p>
 			</div>
 		{:else if projectsState.activeScan}
 			{#if projectsState.activeScan.scan === 'health'}
@@ -41,42 +42,3 @@
 		{/if}
 	</div>
 </div>
-
-<style>
-	.project-view-shell {
-		display: flex;
-		width: 100%;
-		height: 100%;
-		overflow: hidden;
-	}
-	.canvas-area {
-		flex: 1;
-		height: 100%;
-		position: relative;
-		overflow: hidden;
-		background: var(--bg);
-	}
-	.loading-state,
-	.error-state {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		height: 100%;
-		gap: 12px;
-		color: var(--text-muted);
-	}
-	.spinner {
-		width: 24px;
-		height: 24px;
-		border: 2px solid var(--border);
-		border-top-color: var(--accent);
-		border-radius: 50%;
-		animation: spin 0.8s linear infinite;
-	}
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
-	}
-</style>

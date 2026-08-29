@@ -7,7 +7,7 @@
 
 {#if entry}
 	<div
-		class="modal-backdrop"
+		class="dialog-backdrop fixed inset-0 box ycenter xcenter pad-top-2xl z-modal"
 		role="dialog"
 		aria-modal="true"
 		aria-label={entry.title}
@@ -15,77 +15,75 @@
 		onkeydown={(e) => e.key === 'Escape' && logsState.closeModal()}
 		tabindex="-1"
 	>
-		<div class="modal-card" role="document">
-			<div class="modal-header">
-				<div class="header-left">
-					<span class="badge {entry.type === 'commit' ? 'green' : entry.type === 'session' ? 'purple' : 'accent'}">
-						{entry.type}
-					</span>
-					<h3>{entry.title}</h3>
+		<div class="dialog-card card radius-lg bg-dialog border shadow-lg box dialog-md">
+			<header class="dialog-header row ycenter xbetween pad-x-sm pad-y-xs border-bottom">
+				<div class="row ycenter gap-2xs grow min0">
+					<span class="badge" class:badge-success={entry.type === 'commit'} class:badge-accent={entry.type === 'session'}>{entry.type}</span>
+					<h3 class="text-md weight-600 m-0 truncate">{entry.title}</h3>
 				</div>
-				<button class="btn-close" onclick={() => logsState.closeModal()}>✕</button>
-			</div>
+				<button class="button is-icon text-muted" onclick={() => logsState.closeModal()} aria-label="Close entry details">✕</button>
+			</header>
 
-			<div class="modal-body">
+			<div class="dialog-body box gap-sm pad-x-sm pad-y-sm overflow-y-auto">
 				{#if entry.time}
-					<div class="field-item">
-						<span class="lbl">Timestamp:</span>
-						<span class="val">{new Date(entry.time).toLocaleString()}</span>
+					<div class="row ycenter gap-2xs text-sm">
+						<span class="text-muted tt-u weight-600 text-xs">Timestamp</span>
+						<span>{new Date(entry.time).toLocaleString()}</span>
 					</div>
 				{/if}
 
 				{#if entry.url}
-					<div class="field-item">
-						<span class="lbl">URL:</span>
-						<a href={entry.url} target="_blank" rel="noreferrer" class="val link">{entry.url} ↗</a>
+					<div class="row ycenter gap-2xs text-sm">
+						<span class="text-muted tt-u weight-600 text-xs">URL</span>
+						<a href={entry.url} target="_blank" rel="noreferrer" class="link truncate">{entry.url} ↗</a>
 					</div>
 				{/if}
 
 				{#if raw?.hash}
-					<div class="field-item">
-						<span class="lbl">Commit Hash:</span>
-						<code class="val code">{raw.hash}</code>
+					<div class="row ycenter gap-2xs text-sm">
+						<span class="text-muted tt-u weight-600 text-xs">Commit Hash</span>
+						<code class="text-xs">{raw.hash}</code>
 					</div>
 				{/if}
 
 				{#if raw?.author}
-					<div class="field-item">
-						<span class="lbl">Author:</span>
-						<span class="val">{raw.author}</span>
+					<div class="row ycenter gap-2xs text-sm">
+						<span class="text-muted tt-u weight-600 text-xs">Author</span>
+						<span>{raw.author}</span>
 					</div>
 				{/if}
 
 				{#if raw?.summary}
-					<div class="field-card">
-						<span class="card-lbl">Summary</span>
-						<p class="summary-text">{raw.summary}</p>
+					<div class="box gap-2xs">
+						<span class="text-muted tt-u weight-600 text-xs">Summary</span>
+						<p class="text-sm m-0">{raw.summary}</p>
 					</div>
 				{/if}
 
 				{#if raw?.content || raw?.text}
-					<div class="field-card">
-						<span class="card-lbl">Content</span>
-						<pre class="content-pre">{raw.content || raw.text}</pre>
+					<div class="box gap-2xs">
+						<span class="text-muted tt-u weight-600 text-xs">Content</span>
+						<pre class="text-sm grow min0 bg terminal pad-2xs radius-sm border">{raw.content || raw.text}</pre>
 					</div>
 				{/if}
 
 				{#if raw?.tags && raw.tags.length > 0}
-					<div class="field-item">
-						<span class="lbl">Tags:</span>
-						<div class="tags-wrap">
+					<div class="box gap-2xs">
+						<span class="text-muted tt-u weight-600 text-xs">Tags</span>
+						<div class="row gap-2xs wrap">
 							{#each raw.tags as tag}
-								<span class="tag">{tag}</span>
+								<span class="badge text-xs">{tag}</span>
 							{/each}
 						</div>
 					</div>
 				{/if}
 
 				{#if raw?.tool_calls}
-					<div class="field-card">
-						<span class="card-lbl">Tool Calls ({raw.tool_calls.length})</span>
-						<ul class="tool-list">
+					<div class="box gap-2xs">
+						<span class="text-muted tt-u weight-600 text-xs">Tool Calls ({raw.tool_calls.length})</span>
+						<ul class="reset-list box gap-3xs">
 							{#each raw.tool_calls as tc}
-								<li><code>{tc.name || tc.tool}</code></li>
+								<li class="text-xs"><code>{tc.name || tc.tool}</code></li>
 							{/each}
 						</ul>
 					</div>
@@ -94,136 +92,3 @@
 		</div>
 	</div>
 {/if}
-
-<style>
-	.modal-backdrop {
-		position: fixed;
-		inset: 0;
-		background: rgba(0, 0, 0, 0.7);
-		backdrop-filter: blur(4px);
-		z-index: 50;
-		display: grid;
-		place-items: center;
-		padding: 24px;
-	}
-	.modal-card {
-		background: var(--bg-panel);
-		border: 1px solid var(--border);
-		border-radius: var(--radius-md);
-		box-shadow: var(--shadow-float);
-		width: 580px;
-		max-width: 100%;
-		max-height: 80vh;
-		display: flex;
-		flex-direction: column;
-		overflow: hidden;
-	}
-	.modal-header {
-		padding: 16px 20px;
-		border-bottom: 1px solid var(--border);
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-	}
-	.header-left {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		overflow: hidden;
-	}
-	.header-left h3 {
-		font-size: 13px;
-		color: var(--text-primary);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.btn-close {
-		all: unset;
-		cursor: pointer;
-		font-size: 13px;
-		color: var(--text-muted);
-		padding: 4px 8px;
-		border-radius: 4px;
-		&:hover {
-			background: var(--bg-hover);
-			color: var(--text-primary);
-		}
-	}
-	.modal-body {
-		padding: 20px;
-		overflow-y: auto;
-		display: flex;
-		flex-direction: column;
-		gap: 12px;
-	}
-	.field-item {
-		display: flex;
-		gap: 10px;
-		font-size: 12px;
-	}
-	.lbl {
-		color: var(--text-muted);
-		width: 100px;
-		flex: none;
-	}
-	.val {
-		color: var(--text-primary);
-		word-break: break-all;
-	}
-	.val.link {
-		color: var(--accent);
-	}
-	.val.code {
-		color: var(--pink);
-		font-size: 11px;
-	}
-	.field-card {
-		background: var(--bg-surface);
-		padding: 12px;
-		border-radius: var(--radius-sm);
-		border: 1px solid var(--border-subtle);
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
-	}
-	.card-lbl {
-		font-size: 10px;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--text-muted);
-		font-weight: 600;
-	}
-	.summary-text {
-		font-size: 12px;
-		color: var(--text-primary);
-		line-height: 1.4;
-	}
-	.content-pre {
-		font-size: 11px;
-		color: var(--text-primary);
-		white-space: pre-wrap;
-		word-break: break-word;
-		max-height: 200px;
-		overflow-y: auto;
-	}
-	.tags-wrap {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 4px;
-	}
-	.tag {
-		font-size: 10px;
-		padding: 2px 6px;
-		border-radius: 3px;
-		background: var(--bg-surface);
-		border: 1px solid var(--border);
-		color: var(--text-muted);
-	}
-	.tool-list {
-		list-style: disc;
-		padding-left: 18px;
-		font-size: 11px;
-		color: var(--accent);
-	}
-</style>

@@ -10,39 +10,51 @@
 	}
 </script>
 
-<aside class="session-sidebar" aria-label="Filtered sessions">
-	<div class="search-wrap">
+<aside class="observatory-sidebar border-right box gap-3xs pad-y-2xs" aria-label="Filtered sessions">
+	<!-- Search row -->
+	<div class="row ycenter gap-2xs pad-x-2xs pad-y-3xs border-bottom">
 		<input
-			class="search-input"
+			class="input text-sm grow min0"
 			bind:value={observatory.searchQuery}
 			onkeydown={(event) => event.key === 'Enter' && observatory.search()}
 			placeholder="Search transcripts"
 			aria-label="Search canonical transcripts"
 		/>
-		<button class="search-btn" onclick={() => observatory.search()} disabled={observatory.searching}>Search</button>
-		<span class="count-badge">{observatory.filteredSessions.length} / {observatory.totalSessions}</span>
+		<button class="button primary small text-xs" onclick={() => observatory.search()} disabled={observatory.searching}>
+			{observatory.searching ? '…' : 'Search'}
+		</button>
+		<span class="badge text-xs shrink-0">{observatory.filteredSessions.length}/{observatory.totalSessions}</span>
 	</div>
+
 	{#if observatory.searchQuery.trim() && observatory.searchHits === null && !observatory.searching}
-		<p class="resource-note">Press Search to query Fractorches. This list does not run a title-only substitute.</p>
+		<p class="text-xs text-muted pad-x-2xs m-0">Press Search to query Fractorches. This list does not run a title-only substitute.</p>
 	{/if}
-	<div class="sessions-list">
+
+	<!-- Sessions list -->
+	<div class="sessions-list box gap-3xs pad-x-2xs pad-y-3xs">
 		{#each observatory.filteredSessions as session (session.id)}
-			<button class="session-item" class:selected={session.id === observatory.selectedSessionId} onclick={() => observatory.selectSession(session.id)}>
-				<span class="item-top">
-					<span class="session-title">{titleOf(session)}</span>
-					<span class="agent-pill">{session.agent}</span>
+			<button
+				class="session-item box gap-3xs pad-x-2xs pad-y-3xs text-left cursor-pointer"
+				class:session-selected={session.id === observatory.selectedSessionId}
+				onclick={() => observatory.selectSession(session.id)}
+			>
+				<span class="row ycenter xbetween gap-2xs">
+					<span class="text-sm weight-500 truncate grow min0">{titleOf(session)}</span>
+					<span class="session-agent text-3xs tt-u text-muted shrink-0">{session.agent}</span>
 				</span>
-				<span class="item-bottom">
-					<span class="project-tag">{session.project}</span>
-					<span class="meta-dot" aria-hidden="true">·</span>
-					<span class="turns-text">{session.message_count} messages</span>
-					<span class="meta-dot" aria-hidden="true">·</span>
-					<span class="time-text">{localDate(session.ended_at || session.started_at || session.created_at)}</span>
+				<span class="row ycenter gap-2xs text-3xs text-muted">
+					<span class="session-project truncate">{session.project || 'unknown'}</span>
+					<span aria-hidden="true">·</span>
+					<span>{session.message_count} msgs</span>
+					<span aria-hidden="true">·</span>
+					<span class="truncate">{localDate(session.ended_at || session.started_at || session.created_at)}</span>
 				</span>
-				{#if observatory.searchSnippets.get(session.id)}<small class="session-snippet">{observatory.searchSnippets.get(session.id)}</small>{/if}
+				{#if observatory.searchSnippets.get(session.id)}
+					<small class="text-xs text-muted m-0 italic">{observatory.searchSnippets.get(session.id)}</small>
+				{/if}
 			</button>
 		{:else}
-			<p class="empty-state">No sessions match the current Fractorches query and filters.</p>
+			<p class="text-sm text-muted pad-x-2xs m-0">No sessions match the current Fractorches query and filters.</p>
 		{/each}
 	</div>
 </aside>

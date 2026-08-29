@@ -18,33 +18,35 @@
 	import AgentComparisonCard from './AgentComparisonCard.svelte';
 	import ModelBreakdownTable from './ModelBreakdownTable.svelte';
 
-	onMount(() => {
-		observatory.load();
-	});
+	onMount(() => observatory.load());
 </script>
 
-<div class="observatory-root">
-	<!-- Header with tabs, search, export, filters -->
+<!--
+  Page type: observatory with optional session sidebar.
+  Shell canon: .page-split when sidebar visible, otherwise a padded .page-shell main.
+  All primitives from fractalstyler2 (.box, .row, .card, .field, .input, .select,
+  .button, .badge, .text-*, .pad-*, .gap-*, .surface, .panel, .border, .shadow-*).
+-->
+<div class="page-shell wfull box">
 	<ObservatoryHeader />
 
 	{#if observatory.loading}
-		<div class="center-state">
-			<div class="spinner"></div>
-			<span>Ingesting agent sessions...</span>
+		<div class="box ycenter xcenter gap-sm pad-2xl">
+			<div class="spinner" aria-hidden="true"></div>
+			<span class="text-muted">Ingesting agent sessions…</span>
 		</div>
 	{:else if observatory.error}
-		<div class="center-state error">
-			<span>⚠️ {observatory.error}</span>
-			<button class="retry-btn" onclick={() => observatory.load()}>Retry</button>
+		<div class="box ycenter xcenter gap-sm pad-2xl">
+			<span class="text-danger">⚠ {observatory.error}</span>
+			<button class="button primary" onclick={() => observatory.load()}>Retry</button>
 		</div>
 	{:else}
-		<div class="observatory-body">
-			<!-- Show Session Sidebar in Sessions tab or when a session is selected -->
+		<div class="observatory-body row grow min0">
 			{#if observatory.activeTab === 'sessions' || observatory.selectedSessionId}
 				<SessionSidebar />
 			{/if}
 
-			<main class="observatory-main">
+			<main class="observatory-main grow min0">
 				{#if observatory.selectedSessionId}
 					<TranscriptViewer />
 				{:else if observatory.activeTab === 'sessions'}
@@ -70,12 +72,9 @@
 				{/if}
 			</main>
 
-			<!-- Filter Panel (slides in from right) -->
 			<SessionFilterPanel />
 		</div>
 
-		<!-- Status Footer -->
 		<StatusFooter />
 	{/if}
 </div>
-
