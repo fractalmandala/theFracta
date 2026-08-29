@@ -1,0 +1,18 @@
+import { browser } from '$app/environment';
+export type Registry = { projects: Array<{ name: string; slug: string; tagline?: string; path: string; scansAvailable: string[]; lastScannedDate?: string }> };
+export type ScanPayload = { version: number; scan: string; project: { name: string; slug: string; date: string; tagline?: string; windowDays?: number; commitCount?: number }; stats?: Record<string, any>; groups?: any[]; nodes?: any[]; edges?: any[]; flows?: any[]; files?: any[]; notes?: any[]; [key: string]: any };
+export type LogIndex = { days: Array<{ date: string; file: string; [key: string]: unknown }>; [key: string]: unknown };
+export type LogEntry = { date: string; [key: string]: unknown };
+
+const object = (value: unknown): Record<string, unknown> => { if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid local data response'); return value as Record<string, unknown>; };
+const registry = (value: unknown): Registry => { const data = object(value); if (!Array.isArray(data.projects)) throw new Error('Invalid project registry response'); return data as unknown as Registry; };
+const scan = (value: unknown): ScanPayload => { const data = object(value); if (typeof data.version !== 'number' || typeof data.scan !== 'string' || !object(data.project)) throw new Error('Invalid scan response'); return data as unknown as ScanPayload; };
+const index = (value: unknown): LogIndex => { const data = object(value); if (!Array.isArray(data.days)) throw new Error('Invalid daily-log index response'); return data as unknown as LogIndex; };
+const log = (value: unknown): LogEntry => { const data = object(value); if (typeof data.date !== 'string') throw new Error('Invalid daily-log response'); return data as unknown as LogEntry; };
+export const isTauri = () => browser && Boolean((window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ || (window as unknown as Record<string, unknown>).__TAURI__ || (window as unknown as Record<string, unknown>).__TAURI_IPC__);
+async function response(url: string, init?: RequestInit): Promise<unknown> { const result = await fetch(url, init); if (!result.ok) throw new Error(`Local data request failed (${result.status})`); return result.json(); }
+export async function ipcGetProjects(): Promise<Registry> { if (isTauri()) { const { invoke } = await import('@tauri-apps/api/core'); return registry(await invoke('get_projects')); } return registry(await response('/api/projects')); }
+export async function ipcGetScan(project: string, scanType = 'layout'): Promise<ScanPayload> { if (isTauri()) { const { invoke } = await import('@tauri-apps/api/core'); return scan(await invoke('get_scan', { project, scanType })); } return scan(await response(`/api/scans/${encodeURIComponent(project)}?type=${encodeURIComponent(scanType)}`)); }
+export async function ipcGetDailyLogsIndex(): Promise<LogIndex> { if (isTauri()) { const { invoke } = await import('@tauri-apps/api/core'); return index(await invoke('get_daily_logs_index')); } return index(await response('/api/logs')); }
+export async function ipcGetDailyLog(date: string): Promise<LogEntry> { if (isTauri()) { const { invoke } = await import('@tauri-apps/api/core'); return log(await invoke('get_daily_log', { date })); } return log(await response(`/api/logs/${encodeURIComponent(date)}`)); }
+export async function ipcOpenInEditor(file: string, line?: number, projectPath?: string): Promise<unknown> { if (isTauri()) { const { invoke } = await import('@tauri-apps/api/core'); return invoke('open_in_editor', { file, line, projectPath }); } return response('/api/open-editor', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file, line, projectPath }) }); }

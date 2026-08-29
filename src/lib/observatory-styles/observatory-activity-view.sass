@@ -1,0 +1,203 @@
+@use '$lib/observatory-styles/fractals' as *
+
+.activity-container
+	+stack(m)
+	padding: var(--space-m)
+	background: var(--bg-canvas)
+	flex: 1
+	overflow-y: auto
+
+.summary-grid
+	+auto-grid(140px, xs)
+
+.summary-card
+	+surface(surface, s, 12)
+	+stack(3xs)
+
+	&.highlight
+		border-color: var(--theme-color)
+		border-width: 2px
+
+.summary-val
+	font-size: var(--text-xl)
+	font-weight: 700
+	color: var(--text-primary)
+
+.summary-lbl
+	font-size: var(--text-xs)
+	color: var(--text-muted)
+	text-transform: uppercase
+	letter-spacing: 0.04em
+
+.summary-sub
+	font-size: var(--text-xs)
+	color: var(--text-muted)
+
+.chart-card
+	+surface(surface, m, 12)
+	+stack(m)
+
+.card-header
+	+row(xbetween, ycenter)
+
+.card-title
+	font-size: var(--text-md)
+	font-weight: 600
+	color: var(--text-primary)
+
+.legend
+	+cluster(2xs)
+	font-size: var(--text-xs)
+	color: var(--text-muted)
+
+.legend-dot
+	display: inline-block
+	width: 8px
+	height: 8px
+	border-radius: 2px
+
+	&.interactive
+		background: #3b82f6
+
+	&.automated
+		background: #f59e0b
+
+.concurrency-chart
+	min-height: 120px
+
+.chart-bars
+	+row(stretch, flex-end)
+	gap: 2px
+	height: 100px
+
+.chart-bar
+	flex: 1
+	min-width: 3px
+	background: #3b82f6
+	border-radius: 2px 2px 0 0
+	height: calc(var(--bar-pct) * 1%)
+
+.chart-axis
+	+row(xbetween)
+	font-size: var(--text-xs)
+	color: var(--text-muted)
+	margin-top: var(--space-3xs)
+
+.chart-empty
+	+center
+	padding: var(--space-l)
+	color: var(--text-muted)
+	font-size: var(--text-sm)
+
+.count-badge
+	font-size: var(--text-xs)
+	color: var(--text-muted)
+	background: var(--bg-raised)
+	padding: var(--space-3xs) var(--space-2xs)
+	border-radius: var(--radius-4)
+
+.table-wrap
+	overflow-x: auto
+
+.data-table
+	width: 100%
+	border-collapse: collapse
+	font-size: var(--text-sm)
+
+	th
+		background: var(--bg-raised)
+		padding: var(--space-xs)
+		color: var(--text-muted)
+		font-weight: 600
+		text-align: left
+		border-bottom: 1px solid var(--border)
+
+	td
+		padding: var(--space-xs)
+		border-bottom: 1px solid var(--border-subtle)
+		color: var(--text-secondary)
+
+	tr:hover td
+		background: var(--bg-raised)
+
+.session-cell
+	max-width: 280px
+
+.session-link
+	background: none
+	border: none
+	color: var(--theme-color)
+	font-size: var(--text-sm)
+	cursor: pointer
+	text-align: left
+	padding: 0
+	+truncate
+
+.num-cell
+	text-align: right
+	font-variant-numeric: tabular-nums
+
+.cost-cell
+	color: #34d399
+	font-weight: 600
+	text-align: right
+
+.window-cell
+	font-size: var(--text-xs)
+	color: var(--text-muted)
+	white-space: nowrap
+
+.breakdown-toggle
+	+cluster(2xs)
+
+.toggle-btn
+	+control(sm)
+	background: transparent
+	color: var(--text-muted)
+	border-color: var(--border-subtle)
+
+	&.active
+		background: var(--bg-raised)
+		color: var(--text-primary)
+
+.breakdown-grid
+	+auto-grid(280px, m)
+
+.breakdown-section
+	+stack(2xs)
+
+.breakdown-label
+	font-size: var(--text-sm)
+	font-weight: 600
+	color: var(--text-primary)
+	margin: 0
+
+.breakdown-row
+	+row(ycenter)
+	gap: var(--space-xs)
+
+.breakdown-name
+	width: 100px
+	font-size: var(--text-sm)
+	color: var(--text-secondary)
+	+truncate
+
+.breakdown-bar-track
+	flex: 1
+	height: 8px
+	background: var(--bg-raised)
+	border-radius: var(--radius-4)
+	overflow: hidden
+
+.breakdown-bar-fill
+	height: 100%
+	background: var(--theme-color)
+	border-radius: var(--radius-4)
+	width: calc(var(--bar-pct) * 1%)
+
+.breakdown-val
+	width: 60px
+	font-size: var(--text-sm)
+	color: var(--text-muted)
+	text-align: right
+	font-variant-numeric: tabular-nums

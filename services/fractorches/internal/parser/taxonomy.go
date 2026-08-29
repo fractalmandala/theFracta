@@ -1,0 +1,297 @@
+package parser
+
+import "strings"
+
+// NormalizeToolCategory maps a raw tool name to a normalized
+// category. Categories: Read, Edit, Write, Bash, Grep, Glob,
+// Task, Tool, Other.
+func NormalizeToolCategory(rawName string) string {
+	switch rawName {
+	// Claude Code tools
+	case "Read":
+		return "Read"
+	case "Edit":
+		return "Edit"
+	case "Write", "NotebookEdit":
+		return "Write"
+	case "Bash":
+		return "Bash"
+	case "Grep":
+		return "Grep"
+	case "Glob":
+		return "Glob"
+	case "Task", "Agent":
+		return "Task"
+	case "Skill":
+		return "Tool"
+
+	// Codex tools
+	case "shell_command", "exec_command",
+		"write_stdin", "shell":
+		return "Bash"
+	case "list_files":
+		return "Read"
+	case "apply_patch":
+		return "Edit"
+	case "spawn_agent":
+		return "Task"
+
+	// Gemini tools
+	case "read_file", "list_directory":
+		return "Read"
+	case "write_file":
+		return "Write"
+	case "edit_file", "replace":
+		return "Edit"
+	case "run_command", "execute_command", "run_shell_command":
+		return "Bash"
+	case "search_files", "grep", "grep_search":
+		return "Grep"
+
+	// Kilo (legacy) / RooCode (Cline-family) camelCase tool names.
+	// Read-family verbs (appliedDiff → Edit) and list/search share
+	// an embedded "content" payload field; kilo_legacy.go and
+	// roocode.go strip that field before building InputJSON so the
+	// payload stays a clean argument object.
+	case "appliedDiff", "searchAndReplace",
+		"editedExistingFile", "deleteFile":
+		return "Edit"
+	case "insertContent":
+		return "Write"
+	case "readFile", "listFiles", "listCodeDefinitionNames",
+		"listFilesTopLevel", "listFilesRecursive":
+		return "Read"
+	case "searchFiles", "codebaseSearch":
+		return "Grep"
+	case "writeToFile", "createFile", "newFileCreated":
+		return "Write"
+	case "executeCommand":
+		return "Bash"
+	case "useMcpTool", "use_mcp_tool", "search":
+		return "Tool"
+	case "newTask":
+		return "Task"
+	case "fetchInstructions", "updateTodoList", "finishTask",
+		"switchMode":
+		return "Tool"
+
+	// Antigravity tools
+	case "view_file", "read_url_content":
+		return "Read"
+	case "replace_file_content", "multi_replace_file_content":
+		return "Edit"
+	case "write_to_file":
+		return "Write"
+	case "define_subagent", "invoke_subagent", "manage_subagents",
+		"send_message", "manage_task":
+		return "Task"
+	case "ask_permission", "ask_question", "schedule", "search_web",
+		"generate_image":
+		return "Tool"
+
+	// OpenCode tools (lowercase variants)
+	// Note: "grep" is handled above in the Gemini section.
+	case "read":
+		return "Read"
+	case "edit":
+		return "Edit"
+	case "write":
+		return "Write"
+	case "bash":
+		return "Bash"
+	case "glob":
+		return "Glob"
+	case "task":
+		return "Task"
+
+	// Copilot tools
+	// Note: "edit_file" (Edit), "shell" (Bash), "grep" (Grep),
+	// and "glob" (Glob) are handled in earlier sections.
+	case "view":
+		return "Read"
+	case "report_intent":
+		return "Tool"
+
+	// Cursor tools
+	case "ApplyPatch":
+		return "Edit"
+	case "Shell":
+		return "Bash"
+	case "StrReplace":
+		return "Edit"
+	case "LS":
+		return "Read"
+
+	// Amp tools (not already covered above)
+	// Note: "create_file" is also used by Pi.
+	case "create_file":
+		return "Write"
+	case "look_at":
+		return "Read"
+	case "undo_edit":
+		return "Edit"
+	case "finder":
+		return "Grep"
+	case "read_web_page":
+		return "Read"
+	case "skill":
+		return "Tool"
+
+	// Pi tools (not already covered above)
+	// Note: "grep", "run_command", "read_file", "create_file" are handled above.
+	case "find":
+		return "Read"
+	case "str_replace":
+		return "Edit"
+
+	// OpenClaw tools
+	case "exec":
+		return "Bash"
+	case "process":
+		return "Bash"
+	case "browser", "web_search", "web_fetch":
+		return "Tool"
+	case "image", "canvas", "tts":
+		return "Tool"
+	case "message", "nodes":
+		return "Tool"
+	case "sessions_list", "sessions_history",
+		"sessions_send", "sessions_spawn":
+		return "Task"
+	case "subagents", "agents_list", "session_status":
+		return "Task"
+
+	// Forge tools
+	case "fs_search":
+		return "Grep"
+	case "patch", "multi_patch", "undo", "remove":
+		return "Edit"
+	case "fetch":
+		return "Read"
+	case "todo_write", "todo_read":
+		return "Tool"
+	case "parallel":
+		return "Task"
+
+	// Hermes Agent tools (excluding names already handled above:
+	// read_file→Read, write_file→Write, search_files→Grep,
+	// edit_file→Edit, run_command/execute_command→Bash,
+	// patch→Edit)
+	case "terminal":
+		return "Bash"
+	case "browser_navigate", "browser_snapshot", "browser_click",
+		"browser_type", "browser_scroll", "browser_press",
+		"browser_back", "browser_close", "browser_vision",
+		"browser_console", "browser_get_images":
+		return "Tool"
+	case "vision_analyze":
+		return "Read"
+	case "delegate_task":
+		return "Task"
+	case "execute_code":
+		return "Bash"
+	case "todo", "memory", "session_search", "skill_view",
+		"skills_list", "skill_manage", "clarify",
+		"text_to_speech", "cronjob":
+		return "Tool"
+
+	// Piebald / Piebald-hosted built-in tools (not already covered above).
+	case "ReadFile":
+		return "Read"
+	case "WriteFile":
+		return "Write"
+	case "EditFile":
+		return "Edit"
+	case "RunTerminalCommand":
+		return "Bash"
+	case "LaunchSubagent":
+		return "Task"
+	case "WebFetch", "WebSearch":
+		return "Tool"
+	case "TodoWrite", "AskUserQuestion", "ProposePlanToUser":
+		return "Tool"
+
+	// Zencoder tools (not already covered above).
+	case "subagent__ZencoderSubagent":
+		return "Task"
+	case "zencoder-rag-mcp__web_search":
+		return "Read"
+
+	// Codebuff / Freebuff tools
+	// Note: "read_files" (Warp→Read), "list_directory" (Gemini→Read),
+	// "write_file" (Gemini→Write), "str_replace" (Pi→Edit),
+	// "skill" (Amp→Tool) are handled in earlier sections.
+	case "read_subtree", "file-picker":
+		return "Read"
+	case "suggest_followups", "write_todos", "read_url", "ask_user",
+		"render_ui", "gravity_index":
+		return "Tool"
+	case "run_terminal_command", "basher":
+		return "Bash"
+	case "code-searcher", "code-reviewer":
+		return "Tool"
+	case "spawn_agents":
+		return "Task"
+
+	// ChatGPT tools
+	case "code_interpreter":
+		return "Bash"
+
+	// Shelley (exe.dev) tools (excluding names already handled above:
+	// bash/shell→Bash, patch→Edit, browser/web_search/web_fetch→Tool,
+	// subagent→Task via the default).
+	case "keyword_search":
+		return "Grep"
+	case "read_context_file", "read_image":
+		return "Read"
+	case "change_dir", "output_iframe", "llm_one_shot",
+		"browser_emulate", "browser_network",
+		"browser_accessibility", "browser_profile":
+		return "Tool"
+
+	// Posit Assistant tools (excluding names already handled above:
+	// read→Read, edit→Edit, write→Write, bash→Bash, grep→Grep,
+	// skill→Tool, web_search→Tool)
+	case "ls", "getConsoleContent":
+		return "Read"
+	case "runCode", "executeCode":
+		return "Bash"
+	case "todoWrite", "webfetch", "EnterMode", "ExitMode":
+		return "Tool"
+	case "explore":
+		return "Task"
+
+	// Warp tools
+	case "read_files":
+		return "Read"
+	case "apply_file_diff":
+		return "Edit"
+	case "search_codebase":
+		return "Grep"
+	case "call_mcp_tool", "read_mcp_resource":
+		return "Tool"
+	case "suggest_plan", "suggest_create_plan":
+		return "Tool"
+	case "write_to_long_running_shell_command":
+		return "Bash"
+	case "read_shell_command_output":
+		return "Read"
+	case "use_computer":
+		return "Tool"
+
+	// Poolside tools (only tools not already covered above)
+	case "todo_action", "switch_mode", "question", "exit":
+		return "Tool"
+	case "shell_kill", "shell_status", "shell_tail":
+		return "Bash"
+
+	default:
+		// MCP tools may carry a server prefix (e.g.
+		// "Zencoder_subagent__ZencoderSubagent") or use
+		// spawn_subagent naming ("mcp__zen_subagents__spawn_subagent").
+		if strings.Contains(rawName, "subagent") {
+			return "Task"
+		}
+		return "Other"
+	}
+}

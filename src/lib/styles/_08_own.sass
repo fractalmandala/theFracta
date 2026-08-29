@@ -1,0 +1,1093 @@
+// =============================================================================
+// 08_OWN — Knowledge workspace atoms that aren't in the fractalstyler2 registry.
+//
+// Design taste applied here:
+//   - SHARP CORNERS (radius-0) — no radius theatre
+//   - FAINT BORDERS ONLY — single hairline (border) for division, never fills
+//     standing in for borders, never shadows as cosmetic edges
+//   - SINGLE BREATHING SPACE — every surface sits on var(--bg); no per-region
+//     tinting for sidebar/header/footer drama
+//
+// All atoms below are token-routed. Anything fractalstyler2 already provides
+// (.box, .row, .grid-*, .card, .field, .button, .input, .select, .badge, .kbd,
+// .text-*, .weight-*, .pad-*, .gap-*, .radius-*, .shadow-*, .border, .grow,
+// .shrink-0, .truncate, .surface, .raised, .panel, .bg-popover, .bg-dialog,
+// .fixed, .absolute, .relative, .inset-0, .z-modal, .wfull, .hfull, .min0)
+// is consumed directly in markup — never redefined here.
+// =============================================================================
+
+@use '01_config' as *
+
+// ---------------------------------------------------------------------------
+// App chrome atoms
+// ---------------------------------------------------------------------------
+.logomotif
+	height: 28px
+	width: 28px
+	filter: saturate(0)
+
+.logotype
+	height: 16px
+	filter: saturate(0)
+
+.header-nav
+	font-size: var(--text-sm)
+	text-decoration: none
+	color: var(--text-secondary)
+	&:hover
+		color: var(--theme-color)
+
+// ---------------------------------------------------------------------------
+// Toolbar (top workspace bar)
+// ---------------------------------------------------------------------------
+// Rides .sticky + .row + .ycenter + .xbetween + .gap-xs + .pad-x-sm + .pad-y-2xs.
+// The composition only adds: z-index, surface-blur backdrop, min-height, and
+// bottom border. Layout itself is composed from primitives.
+.surface-blur
+	background: color-mix(in srgb, var(--bg) 88%, transparent)
+	backdrop-filter: blur(12px)
+	-webkit-backdrop-filter: blur(12px)
+
+.toolbar
+	z-index: var(--z-sticky)
+	top: var(--header-height)
+	min-height: var(--control-h-lg)
+
+// Segmented control (View / Split / Edit etc.)
+.mode-segmented
+	display: inline-flex
+	align-items: center
+	height: var(--control-h-md)
+	min-height: var(--control-h-md)
+	padding: 2px
+	background: var(--bg-raised)
+	border: 1px solid var(--border)
+	border-radius: 0
+
+.mode-seg
+	display: inline-flex
+	align-items: center
+	justify-content: center
+	height: 100%
+	padding-inline: var(--space-xs)
+	background: transparent
+	border: none
+	border-radius: 0
+	color: var(--text-secondary)
+	font-size: var(--text-sm)
+	font-weight: 500
+	cursor: pointer
+	transition: background var(--motion-fast) ease, color var(--motion-fast) ease
+	&:hover:not(:disabled)
+		color: var(--text-primary)
+	&.mode-active
+		background: var(--bg)
+		color: var(--text-primary)
+	&:disabled
+		opacity: 0.4
+		cursor: not-allowed
+
+.tool-active
+	background: var(--state-hover)
+	color: var(--text-primary)
+
+.save-btn
+	position: relative
+	&.save-dirty
+		color: var(--theme-color)
+	.dirty-dot
+		top: 4px
+		right: 4px
+		width: 6px
+		height: 6px
+		background: var(--danger)
+
+.separator
+	width: 1px
+	height: 18px
+	background: var(--border)
+	margin-inline: var(--space-3xs)
+	align-self: center
+
+.current-heading
+	max-width: 360px
+
+// ---------------------------------------------------------------------------
+// Knowledge Library (left sidebar)
+// ---------------------------------------------------------------------------
+// The sidebar is a .box .gap-2xs. It sits on var(--bg), no surface tint.
+// Its children are the only project-specific atoms here.
+.sidebar-left
+	width: var(--sidebar-width)
+	flex-shrink: 0
+	padding-top: var(--space-2xs)
+
+.library-icon-btn
+	width: var(--control-h-sm)
+	height: var(--control-h-sm)
+	display: inline-flex
+	align-items: center
+	justify-content: center
+	background: transparent
+	border: none
+	border-radius: 0
+	color: var(--text-muted)
+	cursor: pointer
+	transition: background var(--motion-fast) ease
+	&:hover
+		background: var(--state-hover-subtle)
+		color: var(--text-primary)
+
+.library-row-btn
+	flex: 1
+	min-width: 0
+	padding: var(--space-2xs) var(--space-2xs)
+	background: transparent
+	border: none
+	border-radius: 0
+	color: var(--text-primary)
+	cursor: pointer
+	text-align: left
+	transition: background var(--motion-fast) ease
+	&:hover
+		background: var(--state-hover-subtle)
+
+.library-row-remove
+	width: var(--control-h-sm)
+	height: var(--control-h-sm)
+	display: inline-flex
+	align-items: center
+	justify-content: center
+	background: transparent
+	border: none
+	border-radius: 0
+	color: var(--text-muted)
+	cursor: pointer
+	opacity: 0
+	transition: opacity var(--motion-fast) ease, color var(--motion-fast) ease
+	&:hover
+		color: var(--danger)
+	li:hover > div > &
+		opacity: 1
+
+.library-file-btn
+	width: 100%
+	padding: var(--space-3xs) var(--space-2xs)
+	background: transparent
+	border: none
+	border-radius: 0
+	color: var(--text-secondary)
+	cursor: pointer
+	text-align: left
+	transition: background var(--motion-fast) ease
+	&:hover
+		background: var(--state-hover-subtle)
+		color: var(--text-primary)
+
+// ---------------------------------------------------------------------------
+// Tab bar
+// ---------------------------------------------------------------------------
+.tabbar
+	z-index: var(--z-sticky)
+	overflow-x: auto
+	scrollbar-width: none
+	&::-webkit-scrollbar
+		height: 0
+
+.tab
+	display: flex
+	align-items: center
+	gap: var(--space-2xs)
+	padding: var(--space-2xs) var(--space-xs)
+	font-size: var(--text-xs)
+	color: var(--text-secondary)
+	background: transparent
+	border: none
+	border-radius: 0
+	cursor: pointer
+	white-space: nowrap
+	max-width: 200px
+	min-width: 80px
+	transition: background var(--motion-fast) ease, color var(--motion-fast) ease
+	position: relative
+	user-select: none
+	&:hover
+		background: var(--state-hover-subtle)
+	&.tab-active
+		background: var(--bg)
+		color: var(--text-primary)
+		font-weight: 600
+		border-bottom: 2px solid var(--theme-color)
+	&.drag-over
+		border-left: 2px solid var(--theme-color)
+
+.tab-home
+	min-width: auto
+	padding: var(--space-2xs) var(--space-2xs)
+	flex-shrink: 0
+
+.tab-close
+	opacity: 0
+	transition: opacity var(--motion-fast) ease, background var(--motion-fast) ease, color var(--motion-fast) ease
+	.tab:hover &
+		opacity: 1
+	&:hover
+		background: var(--state-hover)
+		color: var(--text-primary)
+
+.new-tab-btn
+	width: var(--control-h-md)
+	height: var(--control-h-md)
+	margin-bottom: 2px
+	flex-shrink: 0
+	transition: background var(--motion-fast) ease, color var(--motion-fast) ease
+	&:hover
+		background: var(--state-hover-subtle)
+		color: var(--theme-color)
+
+// ---------------------------------------------------------------------------
+// Dropdowns & scrim
+// ---------------------------------------------------------------------------
+.dropdown
+	position: fixed
+	width: min(92vw, 10rem)
+	background: var(--bg)
+	border: 1px solid var(--border)
+	border-radius: 0
+	box-shadow: var(--shadow-md)
+	z-index: var(--z-modal)
+	padding: var(--space-3xs)
+	left: var(--dropdown-x, 0)
+	top: var(--dropdown-y, 0)
+	overflow: hidden
+
+.dropdown-item
+	padding: var(--space-2xs) var(--space-xs)
+	background: transparent
+	border: none
+	border-radius: 0
+	color: var(--text-primary)
+	cursor: pointer
+	transition: background var(--motion-fast) ease
+	&:hover
+		background: var(--state-hover)
+
+.scrim
+	background: transparent
+
+// ---------------------------------------------------------------------------
+// Search overlay
+// ---------------------------------------------------------------------------
+.search-bar
+	z-index: var(--z-modal)
+	top: calc(var(--header-height) + var(--space-2xs))
+	right: var(--space-xs)
+
+.search-input
+	width: 220px
+	padding: 2px 0
+	background: transparent
+	border: none
+	outline: none
+	&::placeholder
+		color: var(--text-muted)
+	&:focus-visible
+		outline: none
+
+.search-nav-btn
+	width: var(--control-h-md)
+	height: var(--control-h-md)
+	border-radius: 0
+	background: transparent
+	border: none
+	cursor: pointer
+	transition: background var(--motion-fast) ease
+	&:hover:not(:disabled)
+		background: var(--state-hover-subtle)
+
+.search-close
+	width: var(--control-h-md)
+	height: var(--control-h-md)
+	border-radius: 0
+	background: transparent
+	border: none
+	cursor: pointer
+	transition: background var(--motion-fast) ease, color var(--motion-fast) ease
+	&:hover
+		background: var(--state-hover-subtle)
+
+// ---------------------------------------------------------------------------
+// Table of contents
+// ---------------------------------------------------------------------------
+.toc-sidebar
+	left: 0
+	top: 80px
+	bottom: 0
+	width: 240px
+
+.toc-item
+	padding-block: var(--space-3xs)
+	padding-left: calc(var(--space-xs) + var(--toc-indent, 0px))
+	padding-right: var(--space-xs)
+	background: transparent
+	border: none
+	border-left: 2px solid transparent
+	border-radius: 0
+	cursor: cursor-pointer
+	transition: color var(--motion-fast) ease, border-color var(--motion-fast) ease, background var(--motion-fast) ease
+	line-height: 1.5
+	&:hover
+		color: var(--text-primary)
+	&.toc-active
+		color: var(--theme-color)
+		border-left-color: var(--theme-color)
+		border-left-width: 3px
+		font-weight: 500
+		background: color-mix(in srgb, var(--theme-color) 6%, transparent)
+
+// ---------------------------------------------------------------------------
+// Content / reader area
+// ---------------------------------------------------------------------------
+.content-main
+	padding-block: var(--space-md)
+	transition: padding-inline var(--motion-base) var(--ease-out)
+	&.toc-spaced
+		padding-left: calc(240px + var(--space-md))
+
+.raw-source
+	margin: 0 auto
+	padding: var(--space-md)
+	font-family: var(--font-mono)
+	background: var(--bg)
+	color: var(--text-primary)
+	border: 1px solid var(--border)
+	border-radius: 0
+	white-space: pre-wrap
+	overflow-x: auto
+	font-size: var(--raw-font-size, var(--text-sm))
+	line-height: var(--raw-line-height, 1.6)
+	max-width: var(--raw-max-width, none)
+
+// ---------------------------------------------------------------------------
+// Editor — 4 stacked layers (stack, gutter, backdrop, textarea) sharing metrics
+// ---------------------------------------------------------------------------
+.edit-full, .edit-split
+	position: fixed
+	inset: calc(var(--header-height) + var(--control-h-lg) + 38px) 0 0 0
+	z-index: var(--z-base)
+	background: var(--bg)
+
+.edit-split
+	right: 50%
+	border-right: 1px solid var(--border)
+
+.split-preview
+	padding: var(--space-md) var(--space-lg)
+	overflow-y: auto
+
+.editor-wrap
+	top: calc(var(--header-height) + var(--control-h-lg) + 38px)
+	bottom: 0
+	z-index: var(--z-base)
+	&.editor-split
+		right: 50%
+		border-right: 1px solid var(--border)
+
+.editor-stack
+	max-width: var(--editor-max-width, 100%)
+
+.editor,
+.editor-backdrop,
+.editor-gutter
+	position: absolute
+	inset: 0
+	width: 100%
+	height: 100%
+	margin: 0
+	padding: var(--space-md)
+	border: none
+	font-family: var(--font-mono)
+	tab-size: 2
+	-moz-tab-size: 2
+	white-space: pre-wrap
+	word-wrap: break-word
+	overflow-wrap: break-word
+	box-sizing: border-box
+	overflow-x: hidden
+	overflow-y: scroll
+	font-size: var(--editor-font-size, var(--text-sm))
+	line-height: var(--editor-line-height, 1.6)
+
+.editor
+	background: transparent
+	outline: none
+	resize: none
+	color: var(--text-primary)
+	z-index: 1
+	&::placeholder
+		color: var(--text-muted)
+
+.editor-backdrop
+	color: transparent
+	pointer-events: none
+	user-select: none
+	z-index: 0
+
+.editor.with-gutter,
+.editor-backdrop.with-gutter
+	padding-left: calc(var(--space-md) + var(--gutter-w))
+
+.editor-gutter
+	padding-left: calc(var(--space-md) + var(--gutter-w))
+	color: transparent
+	pointer-events: none
+	user-select: none
+	overflow: hidden
+	z-index: 0
+	counter-reset: gl
+	.gl
+		counter-increment: gl
+		position: relative
+	.gl.active
+		background: color-mix(in srgb, var(--text-primary) 3%, transparent)
+	.gl.active::before
+		color: var(--text-secondary)
+		font-weight: 500
+	.gl::before
+		content: counter(gl)
+		position: absolute
+		left: calc(-1 * var(--gutter-w))
+		width: calc(var(--gutter-w) - var(--space-2xs))
+		text-align: right
+		color: var(--text-muted)
+
+.editor-stack.with-gutter::before
+	content: ""
+	position: absolute
+	left: 0
+	top: 0
+	bottom: 0
+	width: calc(var(--space-md) + var(--gutter-w) - var(--space-3xs))
+	border-right: 1px solid color-mix(in srgb, var(--text-primary) 6%, transparent)
+	background: color-mix(in srgb, var(--text-primary) 1%, transparent)
+	z-index: 0
+	pointer-events: none
+
+.editor-backdrop mark.mdv-search-highlight
+	color: transparent
+	background-color: var(--warning)
+	border-radius: 0
+
+.editor-backdrop mark.mdv-search-active
+	color: transparent !important
+	background-color: var(--danger) !important
+
+// ---------------------------------------------------------------------------
+// EmptyState (home / recents / plans / folders)
+// ---------------------------------------------------------------------------
+.empty-root
+	max-width: 1040px
+	margin: 0 auto
+	min-height: calc(100vh - var(--header-height) - var(--space-md))
+
+.icon-44
+	width: 44px
+	height: 44px
+
+.empty-card-scroll
+	max-height: 300px
+	overflow-y: auto
+
+.mta
+	margin-top: auto
+
+.empty-zoom-label
+	min-width: 32px
+	text-align: center
+
+// ---------------------------------------------------------------------------
+// Dialog shells — backdrop, card, header, body, footer, tabs, items
+// ---------------------------------------------------------------------------
+.dialog-backdrop
+	z-index: var(--z-modal)
+	background: color-mix(in srgb, #000 25%, transparent)
+	backdrop-filter: blur(3px)
+	-webkit-backdrop-filter: blur(3px)
+
+.dialog-card
+	overflow: hidden
+
+.dialog-header
+	border-bottom: 1px solid var(--border-subtle)
+
+.dialog-footer
+	border-top: 1px solid var(--border-subtle)
+	background: transparent
+
+.dialog-body
+	overflow-y: auto
+
+// Dialog sizes — token-driven: cap to 92vw, scale with user font.
+$dialog-sizes: (sm: 22rem, md: 30rem, lg: 38rem, xl: 46rem)
+@each $name, $size in $dialog-sizes
+	.dialog-#{$name}
+		width: min(92vw, #{$size})
+		max-width: 100%
+
+.dialog-h-fit
+	max-height: min(90vh, 56rem)
+
+.dialog-h-screen
+	max-height: 80vh
+
+.dialog-content-flex
+	min-height: 12rem
+	max-height: 50vh
+
+.dialog-tab
+	padding: var(--space-2xs) var(--space-xs)
+	background: transparent
+	border: none
+	border-bottom: 2px solid transparent
+	border-radius: 0
+	color: var(--text-secondary)
+	font-size: var(--text-sm)
+	font-weight: 500
+	cursor: pointer
+	transition: color var(--motion-fast) ease, border-color var(--motion-fast) ease
+	&:hover
+		color: var(--text-primary)
+	&.dialog-tab-active
+		color: var(--theme-color)
+		border-bottom-color: var(--theme-color)
+
+.dialog-content
+	gap: var(--space-3xs)
+
+.file-item
+	border-radius: 0
+	transition: background var(--motion-fast) ease
+	&:hover
+		background: var(--state-hover-subtle)
+
+.file-item-nested
+	padding-left: calc(var(--space-sm) + var(--space-md))
+
+.folder-header
+	border-radius: 0
+	transition: background var(--motion-fast) ease
+	&:hover
+		background: var(--state-hover-subtle)
+
+.folder-chevron
+	transition: transform var(--motion-fast) ease
+	&.folder-chevron-open
+		transform: rotate(90deg)
+
+// ---------------------------------------------------------------------------
+// Custom-prompt modal + settings dialog
+// ---------------------------------------------------------------------------
+.field-label
+	font-size: var(--text-xs)
+	font-weight: 500
+	color: var(--text-secondary)
+
+.selection-box
+	background: var(--state-hover-subtle)
+	border: 1px solid var(--border)
+	border-radius: 0
+	padding: var(--space-2xs) var(--space-xs)
+	max-height: 120px
+	overflow-y: auto
+	white-space: pre-wrap
+	word-break: break-word
+
+.prompt-input
+	resize: vertical
+	line-height: 1.45
+
+.field-error-row
+	background: color-mix(in srgb, var(--danger) 8%, transparent)
+
+.settings-section
+	border-bottom: 1px solid var(--border-subtle)
+	&:last-of-type
+		border-bottom: none
+
+.settings-row
+	min-height: var(--control-h-lg)
+	border-radius: 0
+	transition: background var(--motion-fast) ease
+	&:hover
+		background: var(--state-hover-subtle)
+
+.settings-switch
+	width: 18px
+	height: 18px
+	accent-color: var(--theme-color)
+	cursor: pointer
+
+// ---------------------------------------------------------------------------
+// Paste modal — mode tabs, textarea, url-hints list
+// ---------------------------------------------------------------------------
+.mode-tabs
+	min-height: var(--control-h-md)
+
+.mode-tab
+	padding: var(--space-3xs) var(--space-xs)
+	background: transparent
+	border: none
+	border-radius: 0
+	color: var(--text-secondary)
+	font-size: var(--text-xs)
+	font-weight: 500
+	cursor: pointer
+	transition: background var(--motion-fast) ease, color var(--motion-fast) ease
+	&:hover
+		color: var(--text-primary)
+	&.mode-tab-active
+		background: var(--bg)
+		color: var(--text-primary)
+
+.modal-textarea-h
+	height: 240px
+	resize: none
+
+.url-hints
+	border: 1px solid var(--border-subtle)
+	code
+		font-size: var(--text-xs)
+		padding: 1px 4px
+		background: var(--bg)
+		border-radius: 0
+		color: var(--text-secondary)
+	ul
+		line-height: 1.5
+
+.reset-list
+	list-style: none
+	padding: 0
+	margin: 0
+
+.reset-list-pad-md
+	list-style: none
+	padding-left: var(--space-md)
+	margin: 0
+
+.list-disc
+	list-style: disc
+
+// ---------------------------------------------------------------------------
+// AILookup settings — provider rows, prompt rows, edit forms
+// ---------------------------------------------------------------------------
+.provider-favicon
+	width: 16px
+	height: 16px
+	flex-shrink: 0
+	display: inline-flex
+	align-items: center
+	justify-content: center
+	background: var(--state-hover-subtle)
+
+.provider-favicon-img
+	width: 16px
+	height: 16px
+	object-fit: contain
+
+.icon-chevron-slot
+	width: 14px
+	display: inline-flex
+	justify-content: center
+
+.provider-actions
+	opacity: 0
+	transition: opacity var(--motion-fast) ease
+	.provider-row:hover &
+		opacity: 1
+
+.prompt-actions
+	opacity: 0
+	transition: opacity var(--motion-fast) ease
+	.prompt-row:hover &
+		opacity: 1
+
+.dashed-action
+	border-style: dashed
+
+.align-self-start
+	align-self: flex-start
+
+.m-top-2xs
+	margin-top: var(--space-2xs)
+
+.m-top-3xs
+	margin-top: var(--space-3xs)
+
+.m-y-3xs
+	margin-block: var(--space-3xs)
+
+.pad-left-lg
+	padding-left: var(--space-lg)
+
+// ---------------------------------------------------------------------------
+// Status chrome — progress bar, status bar, frontmatter, scroll-top, toast
+// ---------------------------------------------------------------------------
+.progress-bar
+	position: fixed
+	top: 0
+	left: 0
+	right: 0
+	height: 3px
+	background: var(--theme-color)
+	z-index: var(--z-sticky)
+	width: var(--progress, 0%)
+	transition: width 0.1s linear
+	pointer-events: none
+
+.status-bar
+	position: fixed
+	bottom: 0
+	left: 0
+	right: 0
+	z-index: var(--z-raised)
+	background: color-mix(in srgb, var(--bg) 85%, transparent)
+	backdrop-filter: blur(8px)
+	-webkit-backdrop-filter: blur(8px)
+	border-top: 1px solid var(--border-subtle)
+
+.fm-bar
+	max-width: min(100%, 720px)
+	margin: 0 auto
+	padding: var(--space-2xs) var(--space-md)
+	border-bottom: 1px solid var(--border-subtle)
+	gap: var(--space-2xs) var(--space-md)
+
+.scroll-top
+	position: fixed
+	bottom: var(--space-lg)
+	right: var(--space-sm)
+	z-index: var(--z-raised)
+	width: 36px
+	height: 36px
+	background: var(--bg)
+	border: 1px solid var(--border)
+	border-radius: 0
+	color: var(--text-secondary)
+	cursor: pointer
+	transition: opacity var(--motion-fast) ease, background var(--motion-fast) ease
+	opacity: 0.7
+	&:hover
+		opacity: 1
+		background: var(--state-hover)
+
+.toast-stack
+	position: fixed
+	bottom: 96px
+	right: var(--space-sm)
+	z-index: var(--z-toast)
+	max-width: 360px
+
+.toast
+	padding: var(--space-2xs) var(--space-xs)
+	background: var(--bg)
+	border: 1px solid var(--border)
+	border-radius: 0
+	color: var(--text-primary)
+	animation: slideUp var(--motion-base) var(--ease-out)
+
+@keyframes slideUp
+	from
+		opacity: 0
+		transform: translateY(8px)
+	to
+		opacity: 1
+		transform: translateY(0)
+
+// ---------------------------------------------------------------------------
+// Drop zone — drag-over overlay
+// ---------------------------------------------------------------------------
+.dropzone
+	position: fixed
+	inset: 0
+	z-index: var(--z-modal)
+	background: color-mix(in srgb, var(--theme-color) 8%, transparent)
+	backdrop-filter: blur(2px)
+	pointer-events: none
+
+.border-theme
+	border-color: var(--theme-color)
+	border-style: dashed
+
+// ---------------------------------------------------------------------------
+// Marp presentation
+// ---------------------------------------------------------------------------
+.present-root
+	background: #0e0e10
+
+.present-close
+	top: var(--space-sm)
+	right: var(--space-sm)
+	width: var(--control-h-lg)
+	height: var(--control-h-lg)
+	border-radius: 0
+	transition: color var(--motion-fast) ease, background var(--motion-fast) ease
+	&:hover
+		color: var(--text-primary)
+		background: color-mix(in srgb, #fff 8%, transparent)
+
+.present-nav
+	width: 44px
+	height: 44px
+	border-radius: 0
+	transition: color var(--motion-fast) ease, background var(--motion-fast) ease
+	&:hover:not(:disabled)
+		color: var(--text-primary)
+		background: color-mix(in srgb, #fff 8%, transparent)
+	&:disabled
+		opacity: 0.25
+
+.present-stage
+	width: min(100%, calc((100vh - 96px) * 16 / 9))
+
+.present-slide
+	padding: 6% 8%
+	:global(.md-content)
+		max-width: none !important
+		margin: 0 !important
+		padding: 0 !important
+
+.present-counter
+	right: var(--space-xs)
+	bottom: var(--space-xs)
+	padding: 2px var(--space-2xs)
+	background: color-mix(in srgb, var(--text-primary) 4%, transparent)
+	border-radius: 0
+
+// ---------------------------------------------------------------------------
+// Reader controls popover
+// ---------------------------------------------------------------------------
+.rc-panel
+	right: var(--space-xs)
+	top: calc(var(--header-height) + var(--space-2xs))
+	width: min(92vw, 16rem)
+
+.rc-segmented
+	border-radius: 0
+	overflow: hidden
+
+.rc-seg-btn
+	padding-block: var(--space-3xs)
+	background: var(--bg)
+	color: var(--text-secondary)
+	font-size: var(--text-xs)
+	font-weight: 500
+	border: none
+	cursor: pointer
+	transition: background var(--motion-fast) ease, color var(--motion-fast) ease
+	&:hover
+		background: var(--state-hover)
+	&.rc-seg-active
+		background: var(--theme-color)
+		color: var(--text-inverse)
+
+.rc-range
+	height: 4px
+	background: var(--bg-raised)
+	border-radius: 0
+	-webkit-appearance: none
+	appearance: none
+	outline: none
+	&::-webkit-slider-thumb
+		-webkit-appearance: none
+		width: 16px
+		height: 16px
+		border-radius: 0
+		background: var(--theme-color)
+		cursor: pointer
+		border: 2px solid var(--bg)
+	&::-moz-range-thumb
+		width: 16px
+		height: 16px
+		border-radius: 0
+		background: var(--theme-color)
+		cursor: pointer
+		border: 2px solid var(--bg)
+
+// ---------------------------------------------------------------------------
+// Markdown content (rendered article) — descendant of .md-content
+// ---------------------------------------------------------------------------
+.md-content
+	color: var(--text-primary)
+	max-width: var(--content-max, 760px)
+	margin: 0 auto
+	padding-block: var(--space-md)
+	padding-inline: var(--space-md)
+	font-family: var(--md-font-family, inherit)
+	font-size: inherit
+	transition: max-width var(--motion-base) var(--ease-out), font-size var(--motion-base) var(--ease-out), font-family var(--motion-base) var(--ease-out)
+	line-height: 1.65
+	> * + *
+		margin-top: var(--space-sm)
+	h1, h2, h3, h4, h5, h6
+		line-height: 1.25
+		font-weight: 600
+		color: var(--text-primary)
+		letter-spacing: -0.01em
+		margin-top: var(--space-md)
+		&:first-child
+			margin-top: 0
+	h1
+		font-size: 1.85em
+		font-weight: 700
+		letter-spacing: -0.02em
+		margin-top: 1.5em
+	h2
+		font-size: 1.5em
+		margin-top: 1.25em
+	h3
+		font-size: 1.2em
+		margin-top: 1.1em
+	h4
+		font-size: 1em
+	p, ul, ol, blockquote
+		margin-block: var(--space-sm)
+	pre
+		border-radius: 0
+		padding: 1em 1.2em
+		overflow-x: auto
+		font-size: 0.8em
+		border: 1px solid var(--border)
+		background: var(--state-hover-subtle) !important
+		color: var(--text-primary) !important
+		position: relative
+	code
+		font-family: var(--font-mono)
+	:not(pre) > code
+		background: var(--state-hover-subtle)
+		padding: 0.15em 0.4em
+		border-radius: 0
+		font-size: 0.85em
+		color: var(--theme-color-alt)
+		&::before, &::after
+			content: none
+	table
+		border-collapse: collapse
+		width: 100%
+		overflow-x: auto
+		display: block
+		font-size: 0.9em
+	th, td
+		border: 1px solid var(--border)
+		padding: 0.5em 0.75em
+		text-align: left
+	th
+		background: var(--state-hover-subtle)
+		font-weight: 600
+		font-size: 0.9em
+		color: var(--text-secondary)
+	blockquote
+		border-left: 3px solid var(--theme-color)
+		padding-left: 1em
+		color: var(--text-secondary)
+	img
+		max-width: 100%
+		height: auto
+		border-radius: 0
+	hr
+		border: none
+		border-top: 1px solid var(--border-subtle)
+		margin: 2.5em 0
+	.task-list-item
+		list-style: none
+		margin-left: -1.5em
+		input[type='checkbox']
+			margin-right: var(--space-2xs)
+			accent-color: var(--theme-color)
+	a
+		color: var(--theme-color)
+		text-decoration: none
+		&:hover
+			text-decoration: underline
+	.code-copy-btn
+		position: absolute
+		top: 8px
+		right: 8px
+		padding: 3px 10px
+		font-size: var(--text-xs)
+		font-weight: 500
+		font-family: var(--font-sans)
+		color: var(--text-muted)
+		background: color-mix(in srgb, var(--bg) 80%, transparent)
+		border: 1px solid var(--border)
+		border-radius: 0
+		cursor: pointer
+		opacity: 0
+		transition: opacity var(--motion-fast) ease, background var(--motion-fast) ease
+		z-index: 2
+		backdrop-filter: blur(4px)
+		&:hover
+			background: color-mix(in srgb, var(--bg) 95%, transparent)
+			color: var(--text-primary)
+	pre:hover .code-copy-btn
+		opacity: 1
+	.mermaid-diagram
+		overflow-x: auto
+		svg
+			max-width: 100%
+			height: auto
+	.katex-display
+		overflow-x: auto
+		padding: 0.5em 0
+	.katex
+		font-size: 1.1em
+
+// ---------------------------------------------------------------------------
+// Search highlight + link tooltip (viewer layer)
+// ---------------------------------------------------------------------------
+mark.mdv-search-highlight
+	background-color: var(--warning)
+	color: inherit
+	padding: 1px 0
+	border-radius: 0
+
+mark.mdv-search-active
+	background-color: var(--danger) !important
+	color: var(--text-inverse) !important
+
+.link-tooltip
+	display: none
+	position: fixed
+	z-index: var(--z-modal)
+	max-width: 400px
+	padding: var(--space-3xs) var(--space-2xs)
+	font-size: var(--text-xs)
+	font-family: var(--font-mono)
+	color: var(--text-secondary)
+	background: var(--bg)
+	border: 1px solid var(--border)
+	border-radius: 0
+	box-shadow: var(--shadow-md)
+	white-space: nowrap
+	overflow: hidden
+	text-overflow: ellipsis
+	pointer-events: none
+
+// ---------------------------------------------------------------------------
+// Error card (loading / error states)
+// ---------------------------------------------------------------------------
+.error-card
+	width: min(100%, 30rem)
+
+
+.max-w-measure
+	max-width: min(100%, 45rem)
+
+// ---------------------------------------------------------------------------
+// Print — hide workspace chrome, keep only the article
+// ---------------------------------------------------------------------------
+@media print
+	.toolbar, .tabbar, .search-bar, .rc-panel,
+	.toast-stack, .status-bar, .toc-sidebar, .scroll-top,
+	.dialog-backdrop, .modal-backdrop, .dropzone, .lightbox,
+	.app-header, .app-footer, .sidebar-left, .progress-bar
+		display: none !important

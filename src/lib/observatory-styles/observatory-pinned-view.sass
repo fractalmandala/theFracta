@@ -1,0 +1,70 @@
+@use '$lib/observatory-styles/fractals' as *
+
+.pinned-container
+	+stack(m)
+	padding: var(--space-m)
+	background: var(--bg-canvas)
+	flex: 1
+	overflow-y: auto
+
+.pinned-header
+	+row(center, center)
+	gap: var(--space-xs)
+
+.pin-icon
+	font-size: var(--text-lg)
+
+.pinned-title
+	font-size: var(--text-xl)
+	font-weight: 700
+	color: var(--text-primary)
+	margin: 0
+
+.empty-state
+	+center
+	padding: var(--space-3xl)
+	+stack(s)
+
+.empty-icon
+	font-size: 3rem
+	opacity: 0.4
+
+.empty-heading
+	font-size: var(--text-md)
+	font-weight: 600
+	color: var(--text-primary)
+	margin: 0
+
+.empty-subtext
+	font-size: var(--text-sm)
+	color: var(--text-muted)
+	margin: 0
+	max-width: 30ch
+	text-align: center
+
+.pinned-list
+	+stack(xs)
+
+.pinned-item
+	+surface(surface, s, 12)
+	+stack(2xs)
+
+.pinned-session
+	font-size: var(--text-xs)
+	font-weight: 600
+	color: var(--text-muted)
+	text-transform: uppercase
+	letter-spacing: 0.04em
+
+.pinned-content
+	font-size: var(--text-sm)
+	color: var(--text-secondary)
+	margin: 0
+	line-height: 1.5
+
+.unpin-btn
+	+control(sm)
+	align-self: flex-end
+	background: var(--bg-raised)
+	color: var(--text-secondary)
+	border-color: var(--border-subtle)

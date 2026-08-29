@@ -1,0 +1,252 @@
+/* Reset */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/*
+ * Shared design tokens (backgrounds, text, borders, the core accent set,
+ * shadows, radii, fonts, type scale, spacing ladder, chrome heights, and the
+ * high-contrast overrides) come from @kenn-io/kit-ui/theme.css, imported in
+ * main.ts before this file. Only agentsview-specific tokens and deliberate
+ * overrides live here.
+ */
+
+/* Light theme (default) — app-specific tokens */
+:root {
+  /* Deliberate override: kit-ui's --accent-teal is cyan-leaning,
+     which would collide with --accent-cyan below. agentsview uses teal and
+     cyan as distinct agent-identity hues, so keep the greener teal. */
+  --accent-teal: #0d9488; /* kit-ui-check-ignore: app token definition */
+  /* Extra identity accents beyond kit-ui's core set */
+  --accent-rose: #e11d48; /* kit-ui-check-ignore: app token definition */
+  --accent-coral: #f34e3f; /* kit-ui-check-ignore: app token definition */
+  --accent-black: #2d2d2d; /* kit-ui-check-ignore: app token definition */
+  --accent-indigo: #6366f1; /* kit-ui-check-ignore: app token definition */
+  --accent-orange: #e09040; /* kit-ui-check-ignore: app token definition */
+  --accent-sky: #0284c7; /* kit-ui-check-ignore: app token definition */
+  --accent-pink: #ec4899; /* kit-ui-check-ignore: app token definition */
+  --accent-lime: #65a30d; /* kit-ui-check-ignore: app token definition */
+  --accent-cyan: #0891b2; /* kit-ui-check-ignore: app token definition */
+  --accent-violet: #7c3aed; /* kit-ui-check-ignore: app token definition */
+  /* ALL --accent-*-foreground pairs are agentsview-owned, including the
+     ones for kit-ui's core accents (blue/purple/amber/green/red/teal):
+     kit-ui defines no foreground tokens, and these inks are tuned for the
+     agent-identity badge fills. Anyone changing a kit-ui core accent must
+     re-check the matching foreground here for contrast. */
+  --accent-blue-foreground: #ffffff; /* kit-ui-check-ignore: app token definition */
+  --accent-rose-foreground: #ffffff; /* kit-ui-check-ignore: app token definition */
+  --accent-purple-foreground: #ffffff; /* kit-ui-check-ignore: app token definition */
+  --accent-amber-foreground: #07111f; /* kit-ui-check-ignore: app token definition */
+  --accent-green-foreground: #07111f; /* kit-ui-check-ignore: app token definition */
+  --accent-coral-foreground: #07111f; /* kit-ui-check-ignore: app token definition */
+  --accent-black-foreground: #ffffff; /* kit-ui-check-ignore: app token definition */
+  --accent-teal-foreground: #07111f; /* kit-ui-check-ignore: app token definition */
+  --accent-red-foreground: #ffffff; /* kit-ui-check-ignore: app token definition */
+  --accent-indigo-foreground: #000000; /* kit-ui-check-ignore: app token definition */
+  --accent-orange-foreground: #07111f; /* kit-ui-check-ignore: app token definition */
+  --accent-sky-foreground: #07111f; /* kit-ui-check-ignore: app token definition */
+  --accent-pink-foreground: #07111f; /* kit-ui-check-ignore: app token definition */
+  --accent-lime-foreground: #07111f; /* kit-ui-check-ignore: app token definition */
+  --accent-cyan-foreground: #07111f; /* kit-ui-check-ignore: app token definition */
+  --accent-violet-foreground: #ffffff; /* kit-ui-check-ignore: app token definition */
+  /* Tool-category color map (see internal/parser/taxonomy.go for normalized values) */
+  --cat-read:  #4a7ba8; /* Read, Grep, Glob */ /* kit-ui-check-ignore: app token definition */
+  --cat-edit:  #5a8b3a; /* Edit, Write */ /* kit-ui-check-ignore: app token definition */
+  --cat-bash:  #d4a35a; /* Bash */ /* kit-ui-check-ignore: app token definition */
+  --cat-task:  #c45a5a; /* Task / sub-agents */ /* kit-ui-check-ignore: app token definition */
+  --cat-tool:  #7a5fa8; /* Tool: Skills, MCP, misc */ /* kit-ui-check-ignore: app token definition */
+  --cat-other: #888888; /* Other */ /* kit-ui-check-ignore: app token definition */
+  --cat-mixed: #4a4a4a; /* Mixed: parallel-group rail, no-dominant */ /* kit-ui-check-ignore: app token definition */
+  /* Categorical chart series (skill trend and similar stacked charts).
+     Fixed slot order, validated as a set for CVD separation and contrast
+     against the light surface. "other" is the deliberate de-emphasis gray
+     for the folded tail, not a series hue. */
+  --chart-series-1: #2a78d6; /* kit-ui-check-ignore: app token definition */
+  --chart-series-2: #1baf7a; /* kit-ui-check-ignore: app token definition */
+  --chart-series-3: #eda100; /* kit-ui-check-ignore: app token definition */
+  --chart-series-4: #008300; /* kit-ui-check-ignore: app token definition */
+  --chart-series-5: #4a3aa7; /* kit-ui-check-ignore: app token definition */
+  --chart-series-6: #e34948; /* kit-ui-check-ignore: app token definition */
+  --chart-series-other: #898781; /* kit-ui-check-ignore: app token definition */
+  /* Duration UX state colors */
+  --slow-fg:    #f29070; /* kit-ui-check-ignore: app token definition */
+  --slow-bg:    rgba(242, 144, 112, 0.12); /* kit-ui-check-ignore: app token definition */
+  --slow-ring:  rgba(242, 144, 112, 0.20); /* kit-ui-check-ignore: app token definition */
+  --running-fg: #6ad0a8; /* kit-ui-check-ignore: app token definition */
+  --running-bg: rgba(106, 208, 168, 0.12); /* kit-ui-check-ignore: app token definition */
+  --running-ring: rgba(106, 208, 168, 0.22); /* kit-ui-check-ignore: app token definition */
+  --user-bg: #eef2ff; /* kit-ui-check-ignore: app token definition */
+  --assistant-bg: #faf9ff; /* kit-ui-check-ignore: app token definition */
+  --thinking-bg: #f5f3ff; /* kit-ui-check-ignore: app token definition */
+  --tool-bg: #fffbf0; /* kit-ui-check-ignore: app token definition */
+  --code-bg: #1e1e2e; /* kit-ui-check-ignore: app token definition */
+  --code-text: #cdd6f4; /* kit-ui-check-ignore: app token definition */
+  --viewport-indicator: rgba(0, 0, 0, 0.08); /* kit-ui-check-ignore: app token definition */
+}
+
+/* Dark theme — app-specific tokens */
+:root.dark {
+  --accent-teal: #2dd4bf; /* kit-ui-check-ignore: app token definition */
+  --accent-rose: #fb7185; /* kit-ui-check-ignore: app token definition */
+  --accent-coral: #f34e3f; /* kit-ui-check-ignore: app token definition */
+  --accent-black: #b0b0b0; /* kit-ui-check-ignore: app token definition */
+  --accent-indigo: #818cf8; /* kit-ui-check-ignore: app token definition */
+  --accent-orange: #f0a050; /* kit-ui-check-ignore: app token definition */
+  --accent-sky: #38bdf8; /* kit-ui-check-ignore: app token definition */
+  --accent-pink: #f472b6; /* kit-ui-check-ignore: app token definition */
+  --accent-lime: #a3e635; /* kit-ui-check-ignore: app token definition */
+  --accent-cyan: #22d3ee; /* kit-ui-check-ignore: app token definition */
+  --accent-violet: #a78bfa; /* kit-ui-check-ignore: app token definition */
+  --accent-blue-foreground: #07111f; /* kit-ui-check-ignore: app token definition */
+  --accent-rose-foreground: #07111f; /* kit-ui-check-ignore: app token definition */
+  --accent-purple-foreground: #07111f; /* kit-ui-check-ignore: app token definition */
+  --accent-amber-foreground: #07111f; /* kit-ui-check-ignore: app token definition */
+  --accent-green-foreground: #07111f; /* kit-ui-check-ignore: app token definition */
+  --accent-coral-foreground: #07111f; /* kit-ui-check-ignore: app token definition */
+  --accent-black-foreground: #07111f; /* kit-ui-check-ignore: app token definition */
+  --accent-teal-foreground: #07111f; /* kit-ui-check-ignore: app token definition */
+  --accent-red-foreground: #07111f; /* kit-ui-check-ignore: app token definition */
+  --accent-indigo-foreground: #07111f; /* kit-ui-check-ignore: app token definition */
+  --accent-orange-foreground: #07111f; /* kit-ui-check-ignore: app token definition */
+  --accent-sky-foreground: #07111f; /* kit-ui-check-ignore: app token definition */
+  --accent-pink-foreground: #07111f; /* kit-ui-check-ignore: app token definition */
+  --accent-lime-foreground: #07111f; /* kit-ui-check-ignore: app token definition */
+  --accent-cyan-foreground: #07111f; /* kit-ui-check-ignore: app token definition */
+  --accent-violet-foreground: #07111f; /* kit-ui-check-ignore: app token definition */
+  /* Same series hues stepped for the dark surface, not an automatic flip;
+     validated as a set against the dark surface. */
+  --chart-series-1: #3987e5; /* kit-ui-check-ignore: app token definition */
+  --chart-series-2: #199e70; /* kit-ui-check-ignore: app token definition */
+  --chart-series-3: #c98500; /* kit-ui-check-ignore: app token definition */
+  --chart-series-4: #008300; /* kit-ui-check-ignore: app token definition */
+  --chart-series-5: #9085e9; /* kit-ui-check-ignore: app token definition */
+  --chart-series-6: #e66767; /* kit-ui-check-ignore: app token definition */
+  --chart-series-other: #898781; /* kit-ui-check-ignore: app token definition */
+  --user-bg: #111827; /* kit-ui-check-ignore: app token definition */
+  --assistant-bg: #141220; /* kit-ui-check-ignore: app token definition */
+  --thinking-bg: #1a1530; /* kit-ui-check-ignore: app token definition */
+  --tool-bg: #1a1508; /* kit-ui-check-ignore: app token definition */
+  --code-bg: #0d0d14; /* kit-ui-check-ignore: app token definition */
+  --code-text: #cdd6f4; /* kit-ui-check-ignore: app token definition */
+  --viewport-indicator: rgba(255, 255, 255, 0.08); /* kit-ui-check-ignore: app token definition */
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--font-sans);
+  line-height: 1.5;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "cv11", "ss01";
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  font-size: var(--font-size-root);
+}
+
+#app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Selection */
+::selection {
+  background: var(--accent-blue);
+  color: var(--accent-blue-foreground);
+}
+
+/* Focus visible */
+:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 1px;
+}
+
+/* Button reset */
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+}
+
+/* Input reset */
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+/* Code */
+code,
+pre {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-md);
+}
+
+pre {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* Mark tag (search highlights) */
+mark {
+  background: var(--accent-amber);
+  color: var(--text-primary);
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+/* In-session find highlights */
+mark.search-highlight {
+  background: color-mix(in srgb, var(--accent-amber) 35%, transparent);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+mark.search-highlight--current {
+  background: var(--accent-amber);
+  color: var(--text-primary);
+  outline: 1px solid color-mix(in srgb, var(--accent-amber) 80%, var(--text-primary));
+  outline-offset: 1px;
+}
+
+@keyframes duration-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}

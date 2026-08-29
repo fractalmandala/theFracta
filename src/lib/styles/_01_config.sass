@@ -1,0 +1,52 @@
+// ============================================================================
+// config — the builder knobs the Contract names. All !default: overridable at
+// compile time via `@use 'config' with (…)`, never edited in place.
+// ============================================================================
+
+// The responsive seam. Every loop-generated class takes -mob (below) and
+// -desk (at or above) this width.
+$breakpoint: 768px !default
+$responsive-modes: (mob: 'all and (max-width: #{$breakpoint - 1})', desk: 'all and (min-width: #{$breakpoint})') !default
+
+// Literal utility ceiling: .gap-{N}, .radius-{N}, .w-{N}… emit lo…hi in px.
+$utility-range: (1, 256) !default
+
+// Named steps for grid stepping and the shell rails (not the responsive seam).
+$breakpoints: (sm: 640px, md: 768px, lg: 1024px, xl: 1280px) !default
+
+// ============================================================================
+// base — element baseline. Builder infrastructure, not registry classes: the
+// registry is a list of classes; this only makes documents predictable so the
+// classes behave. Deliberately minimal — no typographic opinions beyond body.
+// ============================================================================
+
+*,
+*::before,
+*::after
+	box-sizing: border-box
+
+*
+	margin: 0
+
+body, html
+	font-family: var(--font-sans)
+	font-size: var(--text-sm)
+	line-height: 1.5
+	color: var(--text-primary)
+	background: var(--bg)
+
+img,
+video,
+svg
+	display: block
+	max-width: 100%
+
+button,
+input,
+select,
+textarea
+	font: inherit
+	color: inherit
+
+a
+	color: inherit

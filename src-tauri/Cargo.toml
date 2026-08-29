@@ -1,0 +1,41 @@
+[package]
+name = "fracta-knowledge"
+version = "0.1.0"
+description = "Fracta Knowledge local Markdown workspace"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "fracta_knowledge_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["protocol-asset"] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-cli = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+dirs = "6"
+notify = { version = "7", features = ["macos_fsevent"] }
+notify-debouncer-mini = "0.5"
+tauri-plugin-process = "2"
+tauri-plugin-window-state = "2"
+
+[dev-dependencies]
+# `test` enables Tauri's mock runtime (tauri::test) used by the menu test.
+tauri = { version = "2", features = ["test"] }
+
+# muda menu objects can only be created on the main thread, so this target opts
+# out of the default (threaded) libtest harness and runs on the binary's main
+# thread via `fn main()`.
+[[test]]
+name = "menu_window"
+harness = false

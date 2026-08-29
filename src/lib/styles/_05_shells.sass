@@ -1,0 +1,262 @@
+// ============================================================================
+// shells — L4. Canonical markups are canon: every class here implements the
+// markup registered in the registry. Overlay mechanics, the docs-frame roles
+// and the mobile TOC disclosure are authored to the registered behaviors.
+// Motion reads the motion tokens — presets reach everything.
+// ============================================================================
+
+@use 'sass:string'
+@use 'sass:list'
+@use 'sass:map'
+@use '01_config' as *
+
+$md: map.get($breakpoints, md)
+$lg: map.get($breakpoints, lg)
+
+// --- The app-shell canon ------------------------------------------------------
+.app-shell
+	display: flex
+	flex-direction: column
+	position: relative
+	min-height: 100vh
+
+.app-header
+	display: flex
+	flex-direction: row
+	align-items: center
+	position: sticky
+	top: 0
+	z-index: var(--z-sticky)
+	height: var(--header-height)
+	padding-right: var(--space-sm)
+	padding-left: 88px
+	background: color-mix(in srgb, var(--bg-surface) 88%, transparent)
+	backdrop-filter: blur(12px)
+	-webkit-backdrop-filter: blur(12px)
+	border-bottom: 1px solid var(--border)
+
+.app-main
+	flex: 1 1 0%
+	min-width: 0
+	min-height: calc(100vh - var(--header-height))
+	display: flex
+	flex-direction: row
+
+.main-section
+	flex: 1 1 0%
+	min-width: 0
+
+.sidebar-left,
+.sidebar-right
+	width: var(--sidebar-width)
+	flex-shrink: 0
+	position: sticky
+	top: var(--header-height)
+	height: calc(100vh - var(--header-height))
+	overflow-y: auto
+
+.content-shell
+	max-width: var(--measure)
+	margin-inline: auto
+
+.app-footer
+	display: flex
+	flex-direction: row
+	align-items: center
+	padding-inline: var(--space-sm)
+	min-height: var(--footer-height)
+	border-top: 1px solid var(--border)
+
+// --- .docs — config modifier on .app-shell -----------------------------------
+// Below the seam both rails retract: the left tree goes off-canvas (.open on
+// the shell brings it back — the header menu button toggles it), the right
+// TOC contracts to .docs-mobile-toc. At lg: the three-column frame.
+.docs
+	> .app-main > .sidebar-left,
+	> .app-main > .sidebar-right
+		display: none
+	&.open > .app-main > .sidebar-left
+		display: block
+		position: fixed
+		top: var(--header-height)
+		left: 0
+		z-index: var(--z-modal)
+		width: min(85vw, var(--sidebar-width))
+		height: calc(100dvh - var(--header-height))
+		background: var(--bg)
+		border-right: 1px solid var(--border)
+	@media #{string.unquote('(min-width: #{$lg})')}
+		> .app-main
+			display: grid
+			grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--docs-toc-w, 240px)
+		> .app-main > .sidebar-left
+			display: block
+			border-right: 1px solid var(--border)
+		> .app-main > .sidebar-right
+			display: block
+			border-left: 1px solid var(--border)
+		> .docs-mobile-toc
+			display: none
+
+// Mobile TOC disclosure — <details class="docs-mobile-toc"><summary>…</summary>…
+.docs-mobile-toc
+	padding: var(--space-xs)
+	border: 1px solid var(--border)
+	border-radius: var(--radius-md)
+	background: var(--bg-surface)
+	summary
+		display: flex
+		flex-direction: row
+		align-items: center
+		justify-content: space-between
+		font-weight: 500
+		font-size: var(--text-sm)
+		color: var(--text-primary)
+		cursor: pointer
+		user-select: none
+		list-style: none
+		&::-webkit-details-marker
+			display: none
+	&[open]
+		background: var(--bg-raised)
+		summary
+			padding-bottom: var(--space-2xs)
+			margin-bottom: var(--space-xs)
+			border-bottom: 1px solid var(--border)
+
+// --- Page frames — padding ownership moves with full-bleed chrome ------------
+.page-shell
+	padding-inline: var(--page-gutter)
+	padding-block: var(--space-md)
+
+.page-split
+	display: grid
+	grid-template-columns: minmax(0, 1fr)
+	> .page-main
+		min-width: 0
+		padding: var(--page-gutter)
+	> .page-sidebar
+		display: none
+	@media #{string.unquote('(min-width: #{$md})')}
+		grid-template-columns: var(--sidebar-width) minmax(0, 1fr)
+		> .page-sidebar
+			display: block
+			position: sticky
+			top: var(--header-height)
+			height: calc(100vh - var(--header-height))
+			overflow-y: auto
+			border-right: 1px solid var(--border)
+
+// --- Overlays — shown via .open; triggers carry native aria ------------------
+.drawer
+	position: fixed
+	top: var(--header-height)
+	left: 0
+	z-index: var(--z-modal)
+	width: min(85vw, 320px)
+	height: calc(100dvh - var(--header-height))
+	padding: var(--space-sm)
+	overflow-y: auto
+	background: var(--bg)
+	border-right: 1px solid var(--border)
+	transform: translateX(-105%)
+	visibility: hidden
+	transition: transform var(--motion-base) var(--ease-out), visibility var(--motion-base)
+	&.open
+		transform: translateX(0)
+		visibility: visible
+
+.dialog
+	position: fixed
+	top: 50%
+	left: 50%
+	translate: 0 -4px
+	z-index: var(--z-modal)
+	max-width: min(92vw, 540px)
+	width: 100%
+	background: var(--bg-dialog)
+	border: 1px solid var(--border)
+	border-radius: var(--radius-lg)
+	box-shadow: var(--shadow-lg)
+	opacity: 0
+	visibility: hidden
+	pointer-events: none
+	transition: opacity var(--motion-base) var(--ease-out), visibility var(--motion-base), translate var(--motion-base) var(--ease-out)
+	&.open,
+	&[open]
+		opacity: 1
+		visibility: visible
+		pointer-events: auto
+		translate: 0 0
+	&::backdrop
+		background: rgba(0, 0, 0, 0.5)
+
+.popover
+	position: absolute
+	top: calc(100% + 6px)
+	left: 0
+	z-index: var(--z-raised)
+	min-width: 200px
+	background: var(--bg-popover)
+	border: 1px solid var(--border)
+	border-radius: var(--radius-md)
+	box-shadow: var(--shadow-md)
+	translate: 0 -4px
+	opacity: 0
+	visibility: hidden
+	pointer-events: none
+	transition: opacity var(--motion-fast) var(--ease-out), visibility var(--motion-fast), translate var(--motion-fast) var(--ease-out)
+	&.open
+		opacity: 1
+		visibility: visible
+		pointer-events: auto
+		translate: 0 0
+
+.accordion
+	display: flex
+	flex-direction: column
+	gap: var(--space-2xs)
+
+.accordion-item
+	border: 1px solid var(--border)
+	border-radius: var(--radius-md)
+	background: var(--bg-surface)
+	> .accordion-content
+		display: grid
+		grid-template-rows: 0fr
+		transition: grid-template-rows var(--motion-base) var(--ease-out)
+		> *
+			overflow: hidden
+			min-height: 0
+	&.open > .accordion-content
+		grid-template-rows: 1fr
+
+.accordion-trigger
+	display: flex
+	flex-direction: row
+	align-items: center
+	justify-content: space-between
+	width: 100%
+	min-height: var(--control-h-md)
+	padding: var(--space-2xs) var(--space-xs)
+	font-weight: 500
+	font-size: var(--text-sm)
+	text-align: left
+	background: transparent
+	border: 0
+	cursor: pointer
+	user-select: none
+	&:hover
+		background: var(--bg-raised)
+	&:focus-visible
+		outline: 2px solid var(--ring)
+		outline-offset: -2px
+
+// --- .hero — documented sugar: .box.ycenter + gap-lg + pad-y-xl ---------------
+.hero
+	display: flex
+	flex-direction: column
+	align-items: center
+	justify-content: center
+	gap: var(--space-lg)
+	padding-block: var(--space-xl)

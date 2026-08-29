@@ -1,0 +1,1777 @@
+<script lang="ts">
+  import {
+    ChartColumnIcon,
+    CheckIcon,
+    ChevronDownIcon,
+    CirclePlayIcon,
+    CodeIcon,
+    CopyIcon,
+    EllipsisVerticalIcon,
+    FileTextIcon,
+    FolderIcon,
+    LightbulbIcon,
+    LinkIcon,
+    SearchIcon,
+    SquareTerminalIcon,
+    TriangleAlertIcon,
+  } from "../../icons.js";
+  import { onDestroy, onMount } from "svelte";
+  import type { Session } from "../../api/types.js";
+  import {
+    OpenersService,
+    SessionsService,
+    type ResumeRequest,
+    type ResumeResponse,
+  } from "../../api/generated/index";
+  import {
+    callGenerated,
+    configureGeneratedClient,
+    isAbortError,
+  } from "../../api/runtime.js";
+  import { copyToClipboard } from "../../utils/clipboard.js";
+  import {
+    agentColor,
+    agentForeground,
+    agentLabel,
+    entrypointBadge,
+  } from "../../utils/agents.js";
+  import { formatCost, formatTokenUsage } from "../../utils/format.js";
+  import type { Money } from "../../money.js";
+  import { normalizeMessagePreview } from "../../utils/messages.js";
+  import { getGradeStyle, getGradeLabel } from "../../utils/grade.js";
+  import SignalPanel from "../content/SignalPanel.svelte";
+  import SessionFilterControl from "../filters/SessionFilterControl.svelte";
+  import SidebarToggleButton from "./SidebarToggleButton.svelte";
+  import { sessions } from "../../stores/sessions.svelte.js";
+  import { router } from "../../stores/router.svelte.js";
+  import { insights } from "../../stores/insights.svelte.js";
+  import {
+    supportsResume,
+    buildResumeCommand,
+    formatResumeResponseCommand,
+  } from "../../utils/resume.js";
+  import { codexDesktopLink } from "../../utils/codex.js";
+  import { claudeCodeLink } from "../../utils/claude.js";
+  import { LatestRead } from "../../utils/latest-read.js";
+
+  import { inSessionSearch } from "../../stores/inSessionSearch.svelte.js";
+  import { messages as messagesStore } from "../../stores/messages.svelte.js";
+  import { ui } from "../../stores/ui.svelte.js";
+  import { m } from "../../i18n/index.js";
+
+  interface Props {
+    session: Session | undefined;
+    onBack: () => void;
+  }
+
+  let { session, onBack }: Props = $props();
+  let copiedSessionId = $state("");
+  let menuOpen = $state(false);
+  let renaming = $state(false);
+  let renameValue = $state("");
+  let renameInput = $state<HTMLInputElement | null>(null);
+  let menuBtnEl = $state<HTMLButtonElement | null>(null);
+  let menuEl = $state<HTMLDivElement | null>(null);
+  let showOpenMenu = $state(false);
+  let openers: Opener[] = $state([]);
+  let openFeedback = $state("");
+  let openFeedbackKind = $state<"success" | "error">("success");
+  let feedbackTimer: ReturnType<typeof setTimeout> | undefined;
+  let sessionDir = $state<string | null>(null);
+  const openersRead = new LatestRead();
+  const directoryRead = new LatestRead();
+  const costRead = new LatestRead();
+  const breakdownRead = new LatestRead();
+
+  interface Opener {
+    id: string;
+    name: string;
+    kind: "editor" | "terminal" | "files" | "action";
+    bin: string;
+  }
+
+  interface OpenersResponse {
+    openers: Opener[];
+  }
+
+  interface SessionDirectoryResponse {
+    path: string;
+  }
+
+  interface SessionUsageBreakdownEntry {
+    ordinal: number;
+    message_ordinal?: number;
+    source: string;
+    label: string;
+    timestamp: string;
+    model: string;
+    input_tokens: number;
+    output_tokens: number;
+    cache_creation_input_tokens: number;
+    cache_read_input_tokens: number;
+    cost: Money;
+    has_cost: boolean;
+  }
+
+  onMount(() => {
+    const signal = openersRead.begin();
+    configureGeneratedClient();
+    callGenerated(() => OpenersService.getApiV1Openers(), signal)
+      .then((res) => {
+        if (!openersRead.isCurrent(signal)) return;
+        openers = (res as unknown as OpenersResponse).openers;
+      })
+      .catch((e) => {
+        if (!isAbortError(e)) openers = [];
+      })
+      .finally(() => openersRead.finish(signal));
+    return () => openersRead.cancel();
+  });
+
+  let resolvedSessionDirId: string | null = null;
+  let pendingSessionDirId: string | null = null;
+  $effect(() => {
+    if (!session) {
+      directoryRead.cancel();
+      sessionDir = null;
+      resolvedSessionDirId = null;
+      pendingSessionDirId = null;
+      return;
+    }
+    const id = session.id;
+    if (id === resolvedSessionDirId || id === pendingSessionDirId) return;
+    const signal = directoryRead.begin();
+    pendingSessionDirId = id;
+    sessionDir = null;
+    configureGeneratedClient();
+    callGenerated(
+      () => SessionsService.getApiV1SessionsIdDirectory({ id }),
+      signal,
+    )
+      .then(({ path }) => {
+        if (session?.id === id && directoryRead.isCurrent(signal)) {
+          sessionDir = (path as SessionDirectoryResponse["path"]) || null;
+          resolvedSessionDirId = id;
+        }
+      })
+      .catch((e) => {
+        if (isAbortError(e)) return;
+        // Don't cache the ID on failure so the next
+        // session refresh retries the lookup.
+      })
+      .finally(() => {
+        if (
+          directoryRead.finish(signal) &&
+          pendingSessionDirId === id
+        ) {
+          pendingSessionDirId = null;
+        }
+      });
+  });
+
+  let sessionCost = $state<Money | null>(null);
+  let sessionCostIsRollup = $state(false);
+  let sessionRollupSubagentCount = $state(0);
+  let sessionUsageBreakdownCount = $state(0);
+  let sessionUsageBreakdown = $state<SessionUsageBreakdownEntry[]>([]);
+  // Key of the last successful usage fetch. Cost depends on more
+  // than output tokens (input/cache tokens and explicit usage-event
+  // costs), so the key includes every cost-affecting field present
+  // in API session responses. A resync that changes none of these
+  // (e.g. a cost-only usage event) keeps a stale cost until the
+  // next keyed field moves; closing that would need a freshness
+  // marker in the session API.
+  let costFetchKey: string | null = null;
+  let costSessionId: string | null = null;
+  let breakdownFetchKey: string | null = null;
+
+  function childUsageFetchKey(parentId: string): string {
+    return Array.from(sessions.childSessions.values())
+      .filter((child) => child.parent_session_id === parentId)
+      .map((child) =>
+        [
+          child.id,
+          child.relationship_type ?? "",
+          child.transcript_revision ?? "",
+          child.message_count ?? 0,
+          child.total_output_tokens ?? 0,
+          child.peak_context_tokens ?? 0,
+          child.ended_at ?? "",
+        ].join("\t")
+      )
+      .sort()
+      .join("\n");
+  }
+
+  function usageFetchKey(s: Session): string {
+    return [
+      s.id,
+      s.transcript_revision ?? "",
+      s.total_output_tokens ?? 0,
+      s.peak_context_tokens ?? 0,
+      s.has_total_output_tokens ?? "",
+      s.has_peak_context_tokens ?? "",
+      s.message_count ?? 0,
+      s.ended_at ?? "",
+      sessions.activeSessionUsageVersion,
+      childUsageFetchKey(s.id),
+    ].join("\n");
+  }
+
+  function resetUsageBreakdown() {
+    breakdownRead.cancel();
+    sessionUsageBreakdownCount = 0;
+    sessionUsageBreakdown = [];
+    usageBreakdownOpen = false;
+    usageBreakdownLoading = false;
+    breakdownFetchKey = null;
+  }
+
+  $effect(() => {
+    if (!session) {
+      costRead.cancel();
+      sessionCost = null;
+      sessionCostIsRollup = false;
+      sessionRollupSubagentCount = 0;
+      resetUsageBreakdown();
+      costFetchKey = null;
+      costSessionId = null;
+      return;
+    }
+    const id = session.id;
+    const key = usageFetchKey(session);
+    if (id !== costSessionId) {
+      // Entering a different session invalidates both the displayed
+      // cost and the fetch cache; the cached key must never satisfy
+      // the early return below while another session's request is
+      // still in flight.
+      sessionCost = null;
+      sessionCostIsRollup = false;
+      sessionRollupSubagentCount = 0;
+      resetUsageBreakdown();
+      costFetchKey = null;
+    }
+    if (key === costFetchKey) return;
+    const signal = costRead.begin();
+    costSessionId = id;
+    configureGeneratedClient();
+    callGenerated(
+      () => SessionsService.getApiV1SessionsIdUsage({ id, rollup: true }),
+      signal,
+    )
+      .then((res) => {
+        if (!costRead.isCurrent(signal)) return;
+        costFetchKey = key;
+        sessionRollupSubagentCount = res.rollup_subagent_count ?? 0;
+        sessionCostIsRollup =
+          sessionRollupSubagentCount > 0 && res.has_rollup_cost === true;
+        sessionCost = sessionCostIsRollup
+          ? (res.rollup_cost ?? null)
+          : res.has_cost
+            ? res.cost
+            : null;
+        sessionUsageBreakdownCount = res.breakdown_count ?? 0;
+      })
+      .catch((e) => {
+        if (isAbortError(e) || !costRead.isCurrent(signal)) return;
+        sessionUsageBreakdownCount = 0;
+        // Leave the fetch key unset so the next
+        // session refresh retries the lookup.
+      })
+      .finally(() => costRead.finish(signal));
+  });
+
+  // Breakdown rows are fetched only when the menu opens; large
+  // sessions can have thousands of entries and the count-only
+  // /usage fetch above happens automatically on every session.
+  $effect(() => {
+    if (!usageBreakdownOpen || !session) {
+      breakdownRead.cancel();
+      usageBreakdownLoading = false;
+      return;
+    }
+    const id = session.id;
+    const key = usageFetchKey(session);
+    if (key === breakdownFetchKey) return;
+    const signal = breakdownRead.begin();
+    usageBreakdownLoading = true;
+    configureGeneratedClient();
+    callGenerated(
+      () => SessionsService.getApiV1SessionsIdUsage({ id, breakdown: true }),
+      signal,
+    )
+      .then((res) => {
+        if (!breakdownRead.isCurrent(signal)) return;
+        breakdownFetchKey = key;
+        usageBreakdownLoading = false;
+        sessionUsageBreakdown = Array.isArray(res.breakdown)
+          ? (res.breakdown as SessionUsageBreakdownEntry[])
+          : [];
+      })
+      .catch((e) => {
+        if (isAbortError(e) || !breakdownRead.isCurrent(signal)) return;
+        usageBreakdownLoading = false;
+        sessionUsageBreakdown = [];
+        // Leave the fetch key unset so reopening retries.
+      })
+      .finally(() => breakdownRead.finish(signal));
+  });
+
+  onDestroy(() => {
+    openersRead.cancel();
+    directoryRead.cancel();
+    costRead.cancel();
+    breakdownRead.cancel();
+  });
+
+  let sessionCostLabel = $derived(
+    sessionCost !== null ? formatCost(sessionCost) : null,
+  );
+  let sessionCostTitle = $derived(
+        sessionCostIsRollup
+      ? m.session_breadcrumb_total_cost_title({
+          count: sessionRollupSubagentCount,
+          countLabel: sessionRollupSubagentCount.toLocaleString(),
+        })
+      : m.session_breadcrumb_estimated_session_cost(),
+  );
+  // Menu rows render only while open, so the collapsed dropdown
+  // stays DOM-free.
+  let usageBreakdownOpen = $state(false);
+  let usageBreakdownLoading = $state(false);
+
+  let sessionContextTokens = $derived(session?.peak_context_tokens ?? 0);
+  let sessionOutputTokens = $derived(session?.total_output_tokens ?? 0);
+  let sessionHasContextTokens = $derived(
+    session
+      ? (session.has_peak_context_tokens ?? session.peak_context_tokens > 0)
+      : false,
+  );
+  let sessionHasOutputTokens = $derived(
+    session
+      ? (session.has_total_output_tokens ?? session.total_output_tokens > 0)
+      : false,
+  );
+  let sessionTokenSummary = $derived(
+    session
+      ? formatTokenUsage(
+          sessionContextTokens,
+          sessionHasContextTokens,
+          sessionOutputTokens,
+          sessionHasOutputTokens,
+        )
+      : null,
+  );
+
+  let mainModel = $derived(
+    messagesStore.sessionId === session?.id
+      ? messagesStore.mainModel
+      : "",
+  );
+
+  let resumeModel = $derived(
+    session ? messagesStore.resumeModelFor(session.id) : "",
+  );
+
+  const gradeStyle = $derived(
+    getGradeStyle(session?.health_grade),
+  );
+
+  $effect(() => {
+    if (ui.signalPanelOpen && session?.id) {
+      sessions.fetchSignalDetail(session.id);
+    }
+  });
+
+  function sessionDisplayId(id: string): string {
+    const idx = id.indexOf(":");
+    return idx >= 0 ? id.slice(idx + 1) : id;
+  }
+
+  function formatTokenCount(value: number): string {
+    return Math.max(0, value).toLocaleString();
+  }
+
+  function formatBreakdownContext(entry: SessionUsageBreakdownEntry): string {
+    const context =
+      entry.input_tokens +
+      entry.cache_creation_input_tokens +
+      entry.cache_read_input_tokens;
+    return formatTokenCount(context);
+  }
+
+  function formatBreakdownTitle(entry: SessionUsageBreakdownEntry): string {
+    const parts = [
+      entry.model || entry.source,
+      `${formatBreakdownContext(entry)} ctx`,
+      `${formatTokenCount(entry.output_tokens)} out`,
+    ];
+    if (entry.has_cost) {
+      parts.push(formatCost(entry.cost));
+    }
+    return parts.filter(Boolean).join(" · ");
+  }
+
+  async function copySessionId(
+    rawId: string,
+    sessionId: string,
+  ) {
+    const ok = await copyToClipboard(rawId);
+    if (!ok) return;
+    copiedSessionId = sessionId;
+    setTimeout(() => {
+      if (copiedSessionId === sessionId) copiedSessionId = "";
+    }, 1500);
+  }
+
+
+  let copiedLinkId = $state("");
+  let copiedLinkTimer: ReturnType<typeof setTimeout> | undefined;
+
+  async function copySessionLink() {
+    if (!session) return;
+    const id = session.id;
+    const href = router.buildSessionHref(id);
+    const url = window.location.origin + href;
+    const ok = await copyToClipboard(url);
+    if (!ok) return;
+    copiedLinkId = id;
+    clearTimeout(copiedLinkTimer);
+    copiedLinkTimer = setTimeout(() => {
+      if (copiedLinkId === id) copiedLinkId = "";
+    }, 1500);
+  }
+
+  function handleAgentAnalysis() {
+    if (!session) return;
+    insights.generateForSession(session);
+    router.navigate("recall", { tab: "generated" });
+  }
+
+  function toggleMenu() {
+    menuOpen = !menuOpen;
+  }
+
+  function closeMenu() {
+    menuOpen = false;
+  }
+
+  function startRename() {
+    if (!session) return;
+    renameValue =
+      session.display_name
+      ?? normalizeMessagePreview(session.first_message)
+      ?? "";
+    renaming = true;
+    closeMenu();
+    requestAnimationFrame(() => renameInput?.select());
+  }
+
+  async function submitRename() {
+    if (!renaming || !session) return;
+    renaming = false;
+    const name = renameValue.trim() || null;
+    try {
+      await sessions.renameSession(session.id, name);
+    } catch {
+      // name reverts in UI
+    }
+  }
+
+  function cancelRename() {
+    renaming = false;
+  }
+
+  async function handleDelete() {
+    if (!session) return;
+    closeMenu();
+    try {
+      await sessions.deleteSession(session.id);
+    } catch {
+      // silently fail
+    }
+  }
+
+  function showFeedback(msg: string, kind: "success" | "error" = "success") {
+    openFeedback = msg;
+    openFeedbackKind = kind;
+    clearTimeout(feedbackTimer);
+    feedbackTimer = setTimeout(() => { openFeedback = ""; }, 2000);
+  }
+
+  async function handleResumeIn(opener: Opener) {
+    if (!session) return;
+    showOpenMenu = false;
+    try {
+      configureGeneratedClient();
+      const resp =
+        await SessionsService.postApiV1SessionsIdResume({
+          id: session.id,
+          requestBody: {
+            opener_id: opener.id,
+          } satisfies ResumeRequest,
+        }) as ResumeResponse;
+      if (resp.launched) {
+        showFeedback(m.session_breadcrumb_resumed_in({
+          target: resp.terminal ?? opener.name,
+        }));
+        return;
+      }
+      // Launch failed — fall back to clipboard copy.
+      if (resp.command) {
+        const cmd = formatResumeResponseCommand(session.agent, resp);
+        const ok = cmd ? await copyToClipboard(cmd) : false;
+        showFeedback(
+          ok
+            ? m.session_breadcrumb_command_copied()
+            : m.session_breadcrumb_failed(),
+          ok ? "success" : "error",
+        );
+        return;
+      }
+    } catch {
+      // Fall back to local command build.
+    }
+    const cmd = buildResumeCommand(session.agent, session.id, {
+      model: resumeModel,
+    });
+    if (cmd) {
+      const ok = await copyToClipboard(cmd);
+      showFeedback(
+        ok
+          ? m.session_breadcrumb_command_copied()
+          : m.session_breadcrumb_failed(),
+        ok ? "success" : "error",
+      );
+    } else {
+      showFeedback(m.session_breadcrumb_not_supported(), "error");
+    }
+  }
+
+  async function handleCopyResumeCommand() {
+    if (!session) return;
+    showOpenMenu = false;
+    try {
+      configureGeneratedClient();
+      const resp =
+        await SessionsService.postApiV1SessionsIdResume({
+          id: session.id,
+          requestBody: { command_only: true } satisfies ResumeRequest,
+        }) as ResumeResponse;
+      if (resp.command) {
+        const cmd = formatResumeResponseCommand(session.agent, resp);
+        const ok = cmd ? await copyToClipboard(cmd) : false;
+        showFeedback(
+          ok
+            ? m.session_breadcrumb_command_copied()
+            : m.session_breadcrumb_failed(),
+          ok ? "success" : "error",
+        );
+        return;
+      }
+    } catch {
+      // Fall back to local build.
+    }
+    const cmd = buildResumeCommand(session.agent, session.id, {
+      model: resumeModel,
+    });
+    if (cmd) {
+      const ok = await copyToClipboard(cmd);
+      showFeedback(
+        ok
+          ? m.session_breadcrumb_command_copied()
+          : m.session_breadcrumb_failed(),
+        ok ? "success" : "error",
+      );
+    } else {
+      showFeedback(m.session_breadcrumb_not_supported(), "error");
+    }
+  }
+
+  async function handleCopyFilePath() {
+    showOpenMenu = false;
+    if (!sessionDir) {
+      showFeedback(m.session_breadcrumb_no_path_available(), "error");
+      return;
+    }
+    const ok = await copyToClipboard(sessionDir);
+    showFeedback(
+      ok
+        ? m.session_breadcrumb_path_copied()
+        : m.session_breadcrumb_failed(),
+      ok ? "success" : "error",
+    );
+  }
+
+  async function handleOpenIn(opener: Opener) {
+    if (!session) return;
+    showOpenMenu = false;
+    try {
+      configureGeneratedClient();
+      await SessionsService.postApiV1SessionsIdOpen({
+        id: session.id,
+        requestBody: { opener_id: opener.id },
+      });
+      showFeedback(m.session_breadcrumb_opened_in({
+        target: opener.name,
+      }));
+    } catch {
+      showFeedback(m.session_breadcrumb_failed_to_open(), "error");
+    }
+  }
+
+  async function handleResumeDefault() {
+    if (!session) return;
+    showOpenMenu = false;
+    try {
+      configureGeneratedClient();
+      const resp =
+        await SessionsService.postApiV1SessionsIdResume({
+          id: session.id,
+          requestBody: {},
+        }) as ResumeResponse;
+      if (resp.launched) {
+        showFeedback(
+          m.session_breadcrumb_resumed_in({
+            target: resp.terminal ?? "terminal",
+          }),
+        );
+        return;
+      }
+      if (resp.command) {
+        const cmd = formatResumeResponseCommand(session.agent, resp);
+        const ok = cmd ? await copyToClipboard(cmd) : false;
+        showFeedback(
+          ok
+            ? m.session_breadcrumb_command_copied()
+            : m.session_breadcrumb_failed(),
+          ok ? "success" : "error",
+        );
+        return;
+      }
+    } catch {
+      // Fall back to local command build.
+    }
+    const cmd = buildResumeCommand(session.agent, session.id, {
+      model: resumeModel,
+    });
+    if (cmd) {
+      const ok = await copyToClipboard(cmd);
+      showFeedback(
+        ok
+          ? m.session_breadcrumb_command_copied()
+          : m.session_breadcrumb_failed(),
+        ok ? "success" : "error",
+      );
+    } else {
+      showFeedback(m.session_breadcrumb_not_supported(), "error");
+    }
+  }
+
+  // Remote sessions have host-prefixed IDs (host~rawID).
+  const isLocal = $derived(
+    !session?.id.includes("~"),
+  );
+
+  const canResume = $derived(
+    session
+      ? supportsResume(session.agent) && isLocal
+      : false,
+  );
+
+  const codexLink = $derived(
+    session ? codexDesktopLink(session.agent, session.id) : null,
+  );
+
+  const claudeLink = $derived(
+    session?.agent === "claude" && isLocal
+      ? claudeCodeLink(sessionDir)
+      : null,
+  );
+
+  const terminalOpeners = $derived(
+    openers.filter((o) => o.kind === "terminal"),
+  );
+
+  const claudeDesktopOpener = $derived(
+    session?.agent === "claude"
+      ? openers.find((o) => o.id === "claude-desktop") ?? null
+      : null,
+  );
+
+  const editorOpeners = $derived(
+    openers.filter((o) => o.kind === "editor"),
+  );
+
+  const fileOpeners = $derived(
+    openers.filter((o) => o.kind === "files"),
+  );
+
+  const showDropdown = $derived(
+    canResume ||
+    codexLink !== null ||
+    (isLocal && (
+      editorOpeners.length > 0 ||
+      fileOpeners.length > 0 ||
+      (sessionDir !== null && !!session?.file_path)
+    )),
+  );
+
+  function handleKeydown(e: KeyboardEvent) {
+    if (e.key === "Escape") {
+      if (renaming) {
+        cancelRename();
+      } else if (menuOpen) {
+        closeMenu();
+      } else if (showOpenMenu) {
+        showOpenMenu = false;
+        e.preventDefault();
+      }
+      return;
+    }
+    if (showOpenMenu && isLocal) {
+      // Number key shortcuts (1-9) for quick selection.
+      const num = parseInt(e.key);
+      if (num >= 1 && num <= 9) {
+        const idx = num - 1;
+        if (idx < terminalOpeners.length) {
+          e.preventDefault();
+          handleResumeIn(terminalOpeners[idx]!);
+        }
+      }
+    }
+  }
+
+  function handleClickOutside(e: MouseEvent) {
+    const target = e.target as Node;
+    // Close actions menu
+    if (menuOpen) {
+      if (
+        !menuEl?.contains(target) &&
+        !menuBtnEl?.contains(target)
+      ) {
+        closeMenu();
+      }
+    }
+    // Close open menu
+    if (!(target as HTMLElement).closest?.(".open-group")) {
+      showOpenMenu = false;
+    }
+  }
+</script>
+
+<svelte:document
+  onkeydown={handleKeydown}
+  onclick={handleClickOutside}
+/>
+
+
+<div class="session-breadcrumb">
+  {#if !ui.isMobileViewport && !ui.sidebarOpen}
+    <div
+      class="sidebar-controls"
+      data-sidebar-focus-region="content"
+    >
+      <SidebarToggleButton placement="content" />
+      <SessionFilterControl
+        showDisplay={false}
+        showStarred={false}
+        align="left"
+      />
+    </div>
+  {/if}
+  <button
+    class="breadcrumb-link"
+    onclick={onBack}
+    title={m.session_breadcrumb_back_to_sessions()}
+  >
+    {m.session_breadcrumb_sessions()}
+  </button>
+  <span class="breadcrumb-sep">/</span>
+  {#if renaming}
+    <input
+      class="rename-input"
+      type="text"
+      bind:value={renameValue}
+      bind:this={renameInput}
+      onkeydown={(e) => {
+        if (e.key === "Enter") submitRename();
+        if (e.key === "Escape") cancelRename();
+      }}
+      onblur={submitRename}
+    />
+  {:else}
+    <span class="breadcrumb-current">
+      {session?.display_name ?? session?.project ?? ""}
+    </span>
+  {/if}
+  {#if session}
+    <span class="breadcrumb-meta">
+      <span
+        class="agent-badge"
+        style:background={agentColor(session.agent)}
+        style:color={agentForeground(session.agent)}
+      >{agentLabel(session.agent, session.agent_label)}</span>
+      {#if entrypointBadge(session.entrypoint)}
+        <span class="agent-badge entrypoint-badge">{entrypointBadge(session.entrypoint)}</span>
+      {/if}
+      {#if session.agent === "antigravity-cli" && session.transcript_fidelity === "summary"}
+        <a
+          class="summary-badge"
+          href="https://github.com/kenn-io/agentsview#antigravity-cli-high-resolution-transcripts"
+          target="_blank"
+          rel="noopener noreferrer"
+          title={m.session_breadcrumb_summary_mode_tooltip()}
+        >{m.session_breadcrumb_summary_mode()}</a>
+      {/if}
+      {#if session.parser_malformed_lines}
+        <span
+          class="malformed-badge"
+          title={m.session_breadcrumb_malformed_lines_tooltip({
+            count: session.parser_malformed_lines,
+          })}
+        >{m.session_breadcrumb_malformed_lines({
+          count: session.parser_malformed_lines,
+        })}</span>
+      {/if}
+      {#if (session.agent === "antigravity" || session.agent === "antigravity-cli") && session.decode_confidence === "low"}
+        <span
+          class="decode-badge"
+          title={m.session_breadcrumb_antigravity_decode_confidence_low_tooltip()}
+        >{m.session_breadcrumb_antigravity_decode_confidence_low()}</span>
+      {/if}
+      {#if session.started_at}
+        <span class="session-time">
+          {new Date(session.started_at).toLocaleDateString(
+            undefined,
+            { month: "short", day: "numeric" },
+          )}
+          {new Date(session.started_at).toLocaleTimeString(
+            undefined,
+            { hour: "2-digit", minute: "2-digit" },
+          )}
+        </span>
+      {/if}
+      <button
+        class="grade-badge"
+        style:background={gradeStyle.bg}
+        style:color={gradeStyle.text}
+        style:border-color={gradeStyle.border}
+        onclick={() => ui.toggleSignalPanel()}
+        title={m.session_breadcrumb_session_health()}
+      >
+        {getGradeLabel(session.health_grade)}
+      </button>
+      {#if showDropdown}
+        <span class="open-group">
+          <button
+            class="resume-btn"
+            class:has-feedback-success={openFeedback !== "" && openFeedbackKind === "success"}
+            class:has-feedback-error={openFeedback !== "" && openFeedbackKind === "error"}
+            onclick={(e) => { e.stopPropagation(); showOpenMenu = !showOpenMenu; }}
+            title={canResume
+              ? m.session_breadcrumb_resume_session_in_terminal()
+              : m.session_breadcrumb_session_actions()}
+            aria-label={canResume
+              ? m.session_breadcrumb_resume_session()
+              : m.session_breadcrumb_session_actions()}
+          >
+            {#if openFeedback}
+              {#if openFeedbackKind === "error"}
+                <TriangleAlertIcon size="11" strokeWidth="2.2" aria-hidden="true" />
+              {:else}
+                <CheckIcon size="11" strokeWidth="2.4" aria-hidden="true" />
+              {/if}
+              {openFeedback}
+            {:else}
+              {canResume
+                ? m.session_breadcrumb_resume()
+                : m.session_breadcrumb_open()}
+              <ChevronDownIcon size="8" strokeWidth="2.6" aria-hidden="true" />
+            {/if}
+          </button>
+          {#if showOpenMenu}
+            <div class="open-menu">
+              {#if canResume}
+                {#each terminalOpeners as opener, i (opener.id)}
+                  <button
+                    class="open-menu-item"
+                    onclick={() => handleResumeIn(opener)}
+                  >
+                    <span class="open-menu-num">{i + 1}</span>
+                    <span class="open-menu-name">{opener.name}</span>
+                  </button>
+                {/each}
+                <button class="open-menu-item" onclick={handleResumeDefault}>
+                  <span class="open-menu-num">
+                    <SquareTerminalIcon size="10" strokeWidth="2" aria-hidden="true" />
+                  </span>
+                  <span class="open-menu-name">{m.session_breadcrumb_default_terminal()}</span>
+                </button>
+                {#if codexLink}
+                  <div class="open-menu-divider"></div>
+                  <a
+                    class="open-menu-item"
+                    data-testid="codex-desktop-link"
+                    href={codexLink}
+                    title={m.session_breadcrumb_open_in_codex_desktop()}
+                  >
+                    <span class="open-menu-num">
+                      <CirclePlayIcon size="10" strokeWidth="2" aria-hidden="true" />
+                    </span>
+                    <span class="open-menu-name">{m.session_breadcrumb_open_in_codex_desktop()}</span>
+                  </a>
+                {/if}
+                {#if claudeLink}
+                  <div class="open-menu-divider"></div>
+                  <a
+                    class="open-menu-item"
+                    data-testid="claude-code-link"
+                    href={claudeLink}
+                    title={m.session_breadcrumb_open_in_claude_code()}
+                  >
+                    <span class="open-menu-num">
+                      <CirclePlayIcon size="10" strokeWidth="2" aria-hidden="true" />
+                    </span>
+                    <span class="open-menu-name">{m.session_breadcrumb_open_in_claude_code()}</span>
+                  </a>
+                {/if}
+                <div class="open-menu-divider"></div>
+                <button class="open-menu-item" onclick={handleCopyResumeCommand}>
+                  <span class="open-menu-num">
+                    <CopyIcon size="10" strokeWidth="2" aria-hidden="true" />
+                  </span>
+                  <span class="open-menu-name">{m.session_breadcrumb_copy_command()}</span>
+                </button>
+              {/if}
+              {#if isLocal}
+              <button class="open-menu-item" onclick={handleCopyFilePath}>
+                <span class="open-menu-num">
+                  <FileTextIcon size="10" strokeWidth="2" aria-hidden="true" />
+                </span>
+                <span class="open-menu-name">{m.session_breadcrumb_copy_directory_path()}</span>
+              </button>
+              {#if editorOpeners.length > 0 || fileOpeners.length > 0}
+                <div class="open-menu-divider"></div>
+                <div class="open-menu-section">{m.session_breadcrumb_open_in()}</div>
+                {#each editorOpeners as opener (opener.id)}
+                  <button
+                    class="open-menu-item"
+                    onclick={() => handleOpenIn(opener)}
+                  >
+                    <span class="open-menu-num">
+                      <CodeIcon size="10" strokeWidth="2" aria-hidden="true" />
+                    </span>
+                    <span class="open-menu-name">{opener.name}</span>
+                  </button>
+                {/each}
+                {#each fileOpeners as opener (opener.id)}
+                  <button
+                    class="open-menu-item"
+                    onclick={() => handleOpenIn(opener)}
+                  >
+                    <span class="open-menu-num">
+                      <FolderIcon size="10" strokeWidth="2" aria-hidden="true" />
+                    </span>
+                    <span class="open-menu-name">{opener.name}</span>
+                  </button>
+                {/each}
+              {/if}
+              {/if}
+              {#if canResume && claudeDesktopOpener}
+                <div class="open-menu-divider"></div>
+                <button
+                  class="open-menu-item"
+                  onclick={() => handleResumeIn(claudeDesktopOpener)}
+                >
+                  <span class="open-menu-num">
+                    <CirclePlayIcon size="10" strokeWidth="2" aria-hidden="true" />
+                  </span>
+                  <span class="open-menu-name">Claude Desktop</span>
+                </button>
+              {/if}
+            </div>
+          {/if}
+        </span>
+      {/if}
+      {#if session.id}
+        {@const rawId = sessionDisplayId(session.id)}
+        <button
+          class="session-id"
+          title={m.session_breadcrumb_copy_session_id_value({ id: rawId })}
+          onclick={() => copySessionId(rawId, session.id)}
+          aria-label={m.session_breadcrumb_copy_session_id()}
+        >
+          {copiedSessionId === session.id
+            ? m.session_breadcrumb_copied()
+            : rawId.slice(0, 8)}
+        </button>
+      {/if}
+      {#if sessionTokenSummary}
+        <span class="token-badge token-badge--desktop">
+          {sessionTokenSummary}
+        </span>
+        <span
+          class="token-badge token-badge--mobile"
+          title={sessionTokenSummary}
+        >
+          {sessionTokenSummary}
+        </span>
+      {/if}
+      {#if sessionUsageBreakdownCount > 0}
+        <details class="usage-breakdown" bind:open={usageBreakdownOpen}>
+          <summary
+            class="usage-breakdown-trigger"
+            title={m.session_breadcrumb_usage_breakdown_title()}
+          >
+            {m.session_breadcrumb_usage_breakdown_steps({
+              count: sessionUsageBreakdownCount,
+              countLabel: sessionUsageBreakdownCount.toLocaleString(),
+            })}
+          </summary>
+          {#if usageBreakdownOpen}
+            <div class="usage-breakdown-menu">
+              {#if usageBreakdownLoading}
+                <div class="usage-breakdown-status">
+                  {m.session_breadcrumb_usage_breakdown_loading()}
+                </div>
+              {:else if sessionUsageBreakdown.length === 0}
+                <div class="usage-breakdown-status">
+                  {m.session_breadcrumb_failed()}
+                </div>
+              {:else}
+              {#each sessionUsageBreakdown as row (row.ordinal)}
+                <div class="usage-breakdown-row" title={formatBreakdownTitle(row)}>
+                  <span class="usage-breakdown-label">
+                    {row.label}
+                  </span>
+                  <span class="usage-breakdown-model">
+                    {row.model || row.source}
+                  </span>
+                  <span class="usage-breakdown-tokens">
+                    {formatBreakdownContext(row)} ctx
+                    <span aria-hidden="true">/</span>
+                    {formatTokenCount(row.output_tokens)} out
+                  </span>
+                  {#if row.has_cost}
+                    <span class="usage-breakdown-cost">
+                      {formatCost(row.cost)}
+                    </span>
+                  {/if}
+                </div>
+              {/each}
+              {/if}
+            </div>
+          {/if}
+        </details>
+      {/if}
+      {#if sessionCostLabel}
+        <span class="cost-badge" title={sessionCostTitle}>
+          {#if sessionCostIsRollup}
+            {m.session_breadcrumb_total_cost()}: {sessionCostLabel}
+          {:else}
+            {sessionCostLabel}
+          {/if}
+        </span>
+      {/if}
+      {#if mainModel}
+        <span class="model-badge" title={mainModel}>{mainModel}</span>
+      {/if}
+      <div class="actions-wrapper">
+        <button
+          class="link-btn"
+          class:link-btn--copied={copiedLinkId === session?.id}
+          title={m.session_breadcrumb_copy_link_to_session()}
+          onclick={copySessionLink}
+          aria-label={m.session_breadcrumb_copy_link_to_session()}
+        >
+          {#if copiedLinkId === session?.id}
+            <CheckIcon size="13" strokeWidth="2.4" aria-hidden="true" />
+          {:else}
+            <LinkIcon size="13" strokeWidth="2" aria-hidden="true" />
+          {/if}
+        </button>
+        <button
+          class="minimap-btn"
+          class:minimap-btn--active={ui.vitalsOpen}
+          title={ui.vitalsOpen
+            ? m.session_breadcrumb_hide_session_analysis()
+            : m.session_breadcrumb_show_session_analysis()}
+          onclick={() => ui.toggleVitals()}
+          aria-label={ui.vitalsOpen
+            ? m.session_breadcrumb_hide_session_analysis()
+            : m.session_breadcrumb_show_session_analysis()}
+        >
+          <ChartColumnIcon size="13" strokeWidth="2" aria-hidden="true" />
+        </button>
+        <button
+          class="insight-btn"
+          title={m.insights_page_agent_analysis()}
+          aria-label={m.insights_page_agent_analysis()}
+          onclick={handleAgentAnalysis}
+        >
+          <LightbulbIcon size="13" strokeWidth="2" aria-hidden="true" />
+        </button>
+        <button
+          class="find-btn"
+          class:find-btn--active={inSessionSearch.isOpen}
+          title={m.session_breadcrumb_find_in_session_shortcut()}
+          onclick={() => inSessionSearch.toggle()}
+          aria-label={m.session_breadcrumb_find_in_session()}
+        >
+          <SearchIcon size="13" strokeWidth="2" aria-hidden="true" />
+        </button>
+        <button
+          class="actions-btn"
+          title={m.session_breadcrumb_session_actions()}
+          aria-label={m.session_breadcrumb_session_actions()}
+          bind:this={menuBtnEl}
+          onclick={toggleMenu}
+        >
+          <EllipsisVerticalIcon size="14" strokeWidth="2.4" aria-hidden="true" />
+        </button>
+        {#if menuOpen}
+          <div class="actions-menu" bind:this={menuEl}>
+            <button
+              class="actions-menu-item"
+              onclick={startRename}
+            >
+              {m.session_breadcrumb_rename()}
+            </button>
+            <button
+              class="actions-menu-item danger"
+              onclick={handleDelete}
+            >
+              {m.session_breadcrumb_delete()}
+            </button>
+          </div>
+        {/if}
+      </div>
+    </span>
+  {/if}
+</div>
+
+{#if ui.signalPanelOpen && session}
+  <SignalPanel {session} />
+{/if}
+
+<style>
+  .session-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 14px;
+    border-bottom: 1px solid var(--border-muted);
+    flex-shrink: 0;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .sidebar-controls {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .breadcrumb-link {
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: color 0.12s;
+  }
+
+  .breadcrumb-link:hover {
+    color: var(--accent-blue);
+  }
+
+  .breadcrumb-sep {
+    opacity: 0.3;
+    font-size: 10px;
+  }
+
+  .breadcrumb-current {
+    color: var(--text-primary);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .rename-input {
+    flex: 1;
+    min-width: 0;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-primary);
+    background: var(--bg-surface);
+    border: 1px solid var(--accent-blue);
+    border-radius: 4px;
+    padding: 2px 6px;
+    outline: none;
+    font-family: inherit;
+  }
+
+  .breadcrumb-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  .agent-badge {
+    font-size: 9px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: white;
+    flex-shrink: 0;
+    background: var(--text-muted);
+  }
+
+  .entrypoint-badge {
+    opacity: 0.8;
+  }
+
+  .summary-badge {
+    font-size: 9px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    flex-shrink: 0;
+    color: var(--accent-amber, #e0a458);
+    background: color-mix(in srgb, var(--accent-amber, #e0a458) 18%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent-amber, #e0a458) 40%, transparent);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .summary-badge:hover {
+    text-decoration: underline;
+  }
+
+  .malformed-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 9px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 8px;
+    letter-spacing: 0.02em;
+    flex-shrink: 0;
+    color: var(--accent-amber, #e0a458);
+    background: color-mix(in srgb, var(--accent-amber, #e0a458) 18%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent-amber, #e0a458) 40%, transparent);
+    white-space: nowrap;
+    cursor: default;
+  }
+
+  .decode-badge {
+    font-size: 9px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    flex-shrink: 0;
+    color: var(--accent-red, #e55);
+    background: color-mix(in srgb, var(--accent-red, #e55) 16%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent-red, #e55) 45%, transparent);
+    white-space: nowrap;
+    cursor: help;
+  }
+
+  .session-time {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .grade-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    border: 1px solid;
+    cursor: pointer;
+    line-height: 1.4;
+  }
+
+  .grade-badge:hover {
+    opacity: 0.85;
+  }
+
+  .open-group {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .resume-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-muted);
+    padding: 1px 8px;
+    border-radius: 4px;
+    background: var(--bg-tertiary);
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: color 0.15s, background 0.15s;
+  }
+
+  .resume-btn:hover {
+    color: var(--text-secondary);
+    background: var(--bg-surface-hover);
+  }
+
+  .resume-btn.has-feedback-success {
+    color: var(--accent-green, #2ea043);
+  }
+
+  .resume-btn.has-feedback-error {
+    color: var(--accent-red, #e55);
+  }
+
+  .open-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 4px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-default);
+    border-radius: 8px;
+    padding: 4px;
+    min-width: 200px;
+    z-index: var(--z-popover);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .open-menu-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    width: 100%;
+    padding: 6px 10px;
+    font-size: 13px;
+    color: var(--text-primary);
+    text-decoration: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+
+  .open-menu-item:hover {
+    background: var(--bg-surface-hover);
+  }
+
+  .open-menu-num {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  .open-menu-name {
+    flex: 1;
+    font-weight: 500;
+  }
+
+  .open-menu-divider {
+    height: 1px;
+    background: var(--border-muted);
+    margin: 4px 0;
+  }
+
+  .open-menu-section {
+    padding: 4px 10px 2px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+
+  .session-id {
+    font-size: 10px;
+    font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: var(--bg-tertiary);
+    transition: color 0.15s, background 0.15s;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .session-id:hover {
+    color: var(--text-secondary);
+    background: var(--bg-surface-hover);
+  }
+
+  .token-badge {
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: var(--bg-tertiary);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .token-badge--mobile {
+    display: none;
+    white-space: nowrap;
+  }
+
+  .cost-badge {
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: var(--bg-tertiary);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .usage-breakdown {
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .usage-breakdown-trigger {
+    list-style: none;
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: var(--bg-tertiary);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .usage-breakdown-trigger::-webkit-details-marker {
+    display: none;
+  }
+
+  .usage-breakdown[open] .usage-breakdown-trigger,
+  .usage-breakdown-trigger:hover {
+    color: var(--text-secondary);
+    background: var(--bg-surface-hover);
+  }
+
+  .usage-breakdown-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 4px;
+    width: min(460px, calc(100vw - 24px));
+    max-height: 260px;
+    overflow: auto;
+    padding: 6px;
+    border: 1px solid var(--border-default);
+    border-radius: 6px;
+    background: var(--bg-primary);
+    box-shadow: var(--shadow-lg);
+    z-index: var(--z-popover);
+  }
+
+  .usage-breakdown-status {
+    padding: 5px 6px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .usage-breakdown-row {
+    display: grid;
+    grid-template-columns: minmax(62px, 0.85fr) minmax(90px, 1fr) max-content max-content;
+    gap: 8px;
+    align-items: center;
+    padding: 5px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    line-height: 1.25;
+    color: var(--text-secondary);
+  }
+
+  .usage-breakdown-row:hover {
+    background: var(--bg-surface-hover);
+  }
+
+  .usage-breakdown-label,
+  .usage-breakdown-model {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .usage-breakdown-label {
+    color: var(--text-primary);
+    font-weight: 500;
+  }
+
+  .usage-breakdown-model {
+    color: var(--text-muted);
+  }
+
+  .usage-breakdown-tokens,
+  .usage-breakdown-cost {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .usage-breakdown-cost {
+    color: var(--text-muted);
+  }
+
+  .model-badge {
+    font-size: 10px;
+    color: var(--text-muted);
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: var(--bg-tertiary);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .actions-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .link-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border: none;
+    border-radius: var(--radius-sm, 4px);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    flex-shrink: 0;
+  }
+
+  .link-btn:hover {
+    background: var(--bg-surface-hover);
+    color: var(--accent-blue);
+  }
+
+  .link-btn--copied {
+    color: var(--accent-green, #2ea043);
+  }
+
+  .minimap-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border: none;
+    border-radius: var(--radius-sm, 4px);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    flex-shrink: 0;
+  }
+
+  .minimap-btn:hover {
+    background: var(--bg-surface-hover);
+    color: var(--accent-blue);
+  }
+
+  .minimap-btn--active {
+    color: var(--accent-blue);
+    background: color-mix(
+      in srgb,
+      var(--accent-blue) 12%,
+      transparent
+    );
+  }
+
+  .find-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border: none;
+    border-radius: var(--radius-sm, 4px);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    flex-shrink: 0;
+  }
+
+  .find-btn:hover {
+    background: var(--bg-surface-hover);
+    color: var(--accent-blue);
+  }
+
+  .insight-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border: none;
+    border-radius: var(--radius-sm, 4px);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    flex-shrink: 0;
+  }
+
+  .insight-btn:hover {
+    background: var(--bg-surface-hover);
+    color: var(--accent-blue);
+  }
+
+  .find-btn--active {
+    color: var(--accent-blue);
+    background: color-mix(in srgb, var(--accent-blue) 12%, transparent);
+  }
+
+  .actions-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border: none;
+    border-radius: var(--radius-sm, 4px);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    flex-shrink: 0;
+  }
+
+  .actions-btn:hover {
+    background: var(--bg-surface-hover);
+    color: var(--text-secondary);
+  }
+
+  .actions-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: var(--z-popover);
+    margin-top: 4px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 6px;
+    box-shadow: var(--shadow-lg);
+    padding: 4px 0;
+    min-width: 120px;
+  }
+
+  .actions-menu-item {
+    display: block;
+    width: 100%;
+    padding: 6px 14px;
+    font-size: 12px;
+    color: var(--text-primary);
+    text-align: left;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-family: var(--font-sans);
+  }
+
+  .actions-menu-item:hover {
+    background: var(--bg-surface-hover);
+  }
+
+  .actions-menu-item.danger {
+    color: var(--accent-red, #e55);
+  }
+
+  .actions-menu-item.danger:hover {
+    background: color-mix(
+      in srgb,
+      var(--accent-red, #e55) 10%,
+      transparent
+    );
+  }
+
+  @media (max-width: 760px) {
+    .breadcrumb-meta {
+      gap: 4px;
+    }
+
+    .session-time {
+      display: none;
+    }
+
+    .token-badge--desktop {
+      display: none;
+    }
+
+    .token-badge--mobile {
+      display: inline-flex;
+      font-size: 9px;
+      padding: 1px 4px;
+      max-width: 110px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .usage-breakdown-trigger {
+      font-size: 9px;
+      padding: 1px 4px;
+    }
+
+    .usage-breakdown-menu {
+      right: -54px;
+      width: min(360px, calc(100vw - 16px));
+    }
+
+    .usage-breakdown-row {
+      grid-template-columns: minmax(56px, 0.8fr) minmax(68px, 1fr) max-content;
+      gap: 6px;
+      font-size: 10px;
+    }
+
+    .usage-breakdown-cost {
+      display: none;
+    }
+
+    .session-id {
+      display: none;
+    }
+  }
+</style>

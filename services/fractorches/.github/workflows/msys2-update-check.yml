@@ -1,0 +1,45 @@
+name: MSYS2 Update Check
+
+# Periodically run Windows CI with MSYS2 updates enabled to catch
+# toolchain drift, security fixes, and package metadata changes.
+# If this workflow fails, update the pinned SHA and packages in ci.yml.
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"  # Every Monday at 09:00 UTC
+  workflow_dispatch:
+
+jobs:
+  windows-update-check:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Restore pricing snapshot
+        run: go run ./internal/pricing/cmd/litellm-snapshot -restore
+
+      - name: Setup MinGW (with updates)
+        uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884  # v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: mingw-w64-x86_64-gcc
+          path-type: inherit
+
+      - name: Stub frontend embed dir
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force internal/web/dist | Out-Null
+          Set-Content -Path internal/web/dist/stub.html -Value ok
+
+      - name: Run Go tests
+        run: go test -tags "fts5" ./... -v -count=1
+        env:
+          CGO_ENABLED: "1"

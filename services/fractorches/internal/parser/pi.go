@@ -1,0 +1,744 @@
+package parser
+
+import (
+	"bufio"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/tidwall/gjson"
+)
+
+func (p *piProvider) parseSession(
+	path, project, machine string,
+) (*ParsedSession, []ParsedMessage, error) {
+	return parsePiLikeSession(
+		path, project, machine, p.Def.Type, p.Def.IDPrefix,
+	)
+}
+
+func parsePiLikeSession(
+	path, project, machine string,
+	agent AgentType,
+	idPrefix string,
+) (*ParsedSession, []ParsedMessage, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, nil, fmt.Errorf("stat %s: %w", path, err)
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, nil, fmt.Errorf("open %s: %w", path, err)
+	}
+	defer f.Close()
+
+	lr := newLineReader(f, maxLineSize)
+	defer releaseLineReader(lr)
+
+	// --- Parse session header (first non-whitespace line) ---
+	// Skip whitespace-only lines to stay consistent with
+	// IsPiSessionFile in discovery.go which uses TrimSpace. OMP (Oh My Pi)
+	// v16.3+ prefixes the header with a fixed-width rewritable
+	// {"type":"title",...} slot line holding the current session title;
+	// skip it too (matching IsPiSessionFile) and keep its title.
+	var headerLine, slotTitle string
+	for {
+		line, ok := lr.next()
+		if !ok {
+			return nil, nil, fmt.Errorf(
+				"not a pi session: missing session header in %s", path,
+			)
+		}
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		if gjson.Get(line, "type").Str == "title" {
+			slotTitle = gjson.Get(line, "title").Str
+			continue
+		}
+		headerLine = line
+		break
+	}
+
+	if !gjson.Valid(headerLine) {
+		return nil, nil, fmt.Errorf(
+			"not a pi session: invalid JSON header in %s", path,
+		)
+	}
+
+	if gjson.Get(headerLine, "type").Str != "session" {
+		return nil, nil, fmt.Errorf(
+			"not a pi session: missing session header in %s", path,
+		)
+	}
+
+	sessionID := gjson.Get(headerLine, "id").Str
+	cwd := gjson.Get(headerLine, "cwd").Str
+	headerTitle := gjson.Get(headerLine, "title").Str
+	headerTimestamp := parseTimestamp(gjson.Get(headerLine, "timestamp").Str)
+
+	// If project was not passed in, derive from cwd.
+	if project == "" && cwd != "" {
+		project = ExtractProjectFromCwd(cwd)
+	}
+
+	// Branch lineage. Upstream pi records the parent as branchedFrom, a
+	// file path whose basename without extension is the parent's session
+	// ID. OMP (Oh My Pi) headers instead record the parent's session ID
+	// directly in parentSession, while Prime Agent records its file path there.
+	// branchedFrom wins when present so upstream pi is unchanged.
+	// Both paths reuse this session's own idPrefix, so the mapped value
+	// matches the parent's stored ID (idPrefix + its session id) and
+	// lineage resolves.
+	var parentSessionID string
+	if branchedFrom := gjson.Get(headerLine, "branchedFrom").Str; branchedFrom != "" {
+		parentSessionID = idPrefix + piPersistedPathSessionID(branchedFrom)
+	} else if agent == AgentOMP || agent == AgentPrimeAgent {
+		if parentSession := gjson.Get(headerLine, "parentSession").Str; parentSession != "" {
+			if agent == AgentPrimeAgent {
+				parentSession = primeParentSessionID(path, parentSession)
+			}
+			parentSessionID = idPrefix + parentSession
+		}
+	}
+
+	// OMP writes subagent transcripts inside a directory named after the
+	// parent's transcript file: <project>/<parent>.jsonl sits alongside
+	// <project>/<parent>/<agent>.jsonl. A subagent header carries neither
+	// branchedFrom nor parentSession, so lineage is recovered from the
+	// sibling parent transcript. This nests to arbitrary depth.
+	var isOMPSubagent bool
+	if agent == AgentOMP && parentSessionID == "" {
+		if parentID := ompParentHeaderSessionID(path); parentID != "" {
+			parentSessionID = idPrefix + parentID
+			isOMPSubagent = true
+		}
+	}
+
+	// V1 detection: if header has no id, we may need to derive from filename.
+	isV1 := sessionID == ""
+
+	// --- Main message loop ---
+	var (
+		messages      []ParsedMessage
+		firstMessage  string
+		sessionName   string
+		ordinal       int
+		userCount     int
+		currentModel  string
+		assistantByID map[string]int
+	)
+	assistantByID = make(map[string]int)
+	// Pi emits metadata rows that stay in the tree, so bridge them to the
+	// nearest visible ancestor before assigning SourceParentUUID.
+	visibleAncestorByID := map[string]string{}
+	resolveVisibleAncestor := func(id string) string {
+		if id == "" {
+			return ""
+		}
+		return visibleAncestorByID[id]
+	}
+
+	for {
+		line, ok := lr.next()
+		if !ok {
+			break
+		}
+
+		if !gjson.Valid(line) {
+			continue
+		}
+
+		entryType := gjson.Get(line, "type").Str
+		if entryType == "" {
+			continue
+		}
+		entryID := gjson.Get(line, "id").Str
+		parentID := gjson.Get(line, "parentId").Str
+
+		// If any message entry has an id field, this is a V2 session.
+		if isV1 && entryID != "" {
+			isV1 = false
+		}
+
+		switch entryType {
+		case "message":
+			role := gjson.Get(line, "message.role").Str
+			switch role {
+			case "user":
+				sourceParentUUID := resolveVisibleAncestor(parentID)
+				msg := parsePiUserMessage(
+					line, ordinal, entryID, sourceParentUUID,
+				)
+				if msg == nil {
+					continue
+				}
+				if firstMessage == "" && msg.Content != "" {
+					firstMessage = truncate(
+						strings.ReplaceAll(msg.Content, "\n", " "),
+						300,
+					)
+				}
+				messages = append(messages, *msg)
+				if entryID != "" {
+					visibleAncestorByID[entryID] = entryID
+				}
+				ordinal++
+				userCount++
+
+			case "assistant":
+				sourceParentUUID := resolveVisibleAncestor(parentID)
+				msg := parsePiAssistantMessage(
+					line, ordinal, currentModel, entryID,
+					sourceParentUUID,
+				)
+				if msg == nil {
+					continue
+				}
+				if msg.Model != "" {
+					currentModel = msg.Model
+				}
+				messages = append(messages, *msg)
+				if entryID != "" {
+					assistantByID[entryID] = len(messages) - 1
+					visibleAncestorByID[entryID] = entryID
+				}
+				ordinal++
+
+			case "toolResult":
+				sourceParentUUID := resolveVisibleAncestor(parentID)
+				msg := parsePiToolResultMessage(
+					line, ordinal, entryID, sourceParentUUID,
+				)
+				if msg == nil {
+					continue
+				}
+				messages = append(messages, *msg)
+				if entryID != "" {
+					visibleAncestorByID[entryID] = sourceParentUUID
+				}
+				ordinal++
+
+			default:
+				if entryID != "" {
+					visibleAncestorByID[entryID] = resolveVisibleAncestor(
+						parentID,
+					)
+				}
+				// skip silently
+			}
+
+		case "model_change":
+			if entryID != "" {
+				visibleAncestorByID[entryID] = resolveVisibleAncestor(
+					parentID,
+				)
+			}
+			if id := gjson.Get(line, "modelId").Str; id != "" {
+				currentModel = id
+			}
+
+		case "compaction":
+			sourceParentUUID := resolveVisibleAncestor(parentID)
+			msg := parsePiCompactionMessage(
+				line, ordinal, entryID, sourceParentUUID,
+			)
+			if msg == nil {
+				continue
+			}
+			messages = append(messages, *msg)
+			if entryID != "" {
+				visibleAncestorByID[entryID] = entryID
+			}
+			ordinal++
+
+		case "session_info":
+			if entryID != "" {
+				visibleAncestorByID[entryID] = resolveVisibleAncestor(
+					parentID,
+				)
+			}
+			if name := gjson.Get(line, "name"); name.Exists() {
+				sessionName = name.Str
+			}
+
+		case "child_usage_attributed":
+			if entryID != "" {
+				visibleAncestorByID[entryID] = resolveVisibleAncestor(
+					parentID,
+				)
+			}
+			if agent != AgentPrimeAgent {
+				continue
+			}
+			targetID := gjson.Get(line, "targetId").Str
+			if index, ok := assistantByID[targetID]; ok &&
+				index >= 0 && index < len(messages) {
+				applyPiUsage(
+					&messages[index], gjson.Get(line, "aggregateUsage"),
+				)
+			}
+
+		default:
+			if entryID != "" {
+				visibleAncestorByID[entryID] = resolveVisibleAncestor(
+					parentID,
+				)
+			}
+			// skip silently (e.g., thinking_level_change)
+		}
+	}
+
+	if err := lr.Err(); err != nil {
+		return nil, nil, fmt.Errorf("reading pi %s: %w", path, err)
+	}
+
+	// Session name precedence: the OMP title slot is rewritten in place
+	// and always holds the current title, so it outranks session_info
+	// renames; the header title is the initial auto-generated fallback.
+	if slotTitle != "" {
+		sessionName = slotTitle
+	} else if sessionName == "" {
+		sessionName = headerTitle
+	}
+
+	// OMP subagent transcripts have an empty title slot and header title; the
+	// meaningful label is the agent name, which is the transcript's filename.
+	if isOMPSubagent && sessionName == "" {
+		sessionName = strings.TrimSuffix(filepath.Base(path), ".jsonl")
+	}
+
+	// V1 fallback: derive session ID from filename.
+	if isV1 || sessionID == "" {
+		sessionID = strings.TrimSuffix(filepath.Base(path), ".jsonl")
+	}
+
+	// Compute StartedAt and EndedAt from message timestamps.
+	startedAt := headerTimestamp
+	var endedAt time.Time
+	for _, m := range messages {
+		if m.Timestamp.IsZero() {
+			continue
+		}
+		if startedAt.IsZero() || m.Timestamp.Before(startedAt) {
+			startedAt = m.Timestamp
+		}
+		if endedAt.IsZero() || m.Timestamp.After(endedAt) {
+			endedAt = m.Timestamp
+		}
+	}
+
+	sess := &ParsedSession{
+		ID:               idPrefix + sessionID,
+		Project:          project,
+		Machine:          machine,
+		Agent:            agent,
+		ParentSessionID:  parentSessionID,
+		Cwd:              cwd,
+		FirstMessage:     firstMessage,
+		SessionName:      sessionName,
+		StartedAt:        startedAt,
+		EndedAt:          endedAt,
+		MessageCount:     len(messages),
+		UserMessageCount: userCount,
+		File: FileInfo{
+			Path:  path,
+			Size:  info.Size(),
+			Mtime: info.ModTime().UnixNano(),
+		},
+	}
+	if agent == AgentPrimeAgent && parentSessionID != "" {
+		sess.RelationshipType = RelFork
+	}
+	if isOMPSubagent {
+		sess.RelationshipType = RelSubagent
+	}
+
+	accumulateMessageTokenUsage(sess, messages)
+
+	return sess, messages, nil
+}
+
+func piPersistedPathSessionID(value string) string {
+	base := piPersistedPathBase(value)
+	return strings.TrimSuffix(base, filepath.Ext(base))
+}
+
+func piPersistedPathBase(value string) string {
+	return filepath.Base(strings.ReplaceAll(value, `\`, "/"))
+}
+
+func primeParentSessionID(childPath, persistedPath string) string {
+	base := piPersistedPathBase(persistedPath)
+	localSibling := filepath.Join(filepath.Dir(childPath), base)
+	if headerID, ok := piSessionHeaderID(localSibling); ok && headerID != "" {
+		return headerID
+	}
+	if filepath.IsAbs(persistedPath) &&
+		filepath.Clean(persistedPath) != filepath.Clean(localSibling) {
+		if headerID, ok := piSessionHeaderID(persistedPath); ok && headerID != "" {
+			return headerID
+		}
+	}
+	return strings.TrimSuffix(base, filepath.Ext(base))
+}
+
+// parsePiUserMessage parses a message entry with role="user".
+// Returns nil if the entry is malformed.
+func parsePiUserMessage(
+	line string, ordinal int, sourceUUID, sourceParentUUID string,
+) *ParsedMessage {
+	content := gjson.Get(line, "message.content")
+
+	var text string
+	if content.Type == gjson.String {
+		text = content.Str
+	} else if content.IsArray() {
+		var parts []string
+		content.ForEach(func(_, block gjson.Result) bool {
+			if block.Get("type").Str == "text" {
+				if t := block.Get("text").Str; t != "" {
+					parts = append(parts, t)
+				}
+			}
+			return true
+		})
+		text = strings.Join(parts, "\n")
+	}
+
+	ts := piTimestamp(line)
+
+	return &ParsedMessage{
+		Ordinal:          ordinal,
+		Role:             RoleUser,
+		SourceType:       "user",
+		SourceUUID:       sourceUUID,
+		SourceParentUUID: sourceParentUUID,
+		Content:          text,
+		Timestamp:        ts,
+		ContentLength:    len(text),
+	}
+}
+
+// parsePiAssistantMessage parses a message entry with role="assistant".
+// Returns nil if the entry is malformed. fallbackModel is the most
+// recent model id seen (from a prior assistant message or
+// model_change entry), used when this message has no inline model.
+func parsePiAssistantMessage(
+	line string, ordinal int, fallbackModel, sourceUUID,
+	sourceParentUUID string,
+) *ParsedMessage {
+	var (
+		parts       []string
+		toolCalls   []ParsedToolCall
+		hasThinking bool
+		hasToolUse  bool
+	)
+
+	msgContent := gjson.Get(line, "message.content")
+	if msgContent.Type == gjson.String {
+		// Plain string content (back-compat format variation).
+		parts = append(parts, msgContent.Str)
+	} else {
+		msgContent.ForEach(func(_, block gjson.Result) bool {
+			switch block.Get("type").Str {
+			case "text":
+				if t := block.Get("text").Str; t != "" {
+					parts = append(parts, t)
+				}
+			case "thinking":
+				// Set hasThinking regardless of whether the thinking
+				// field is empty -- redacted thinking blocks have an
+				// empty field but the block type presence is sufficient
+				// to mark the message.
+				hasThinking = true
+				if thinking := block.Get("thinking").Str; thinking != "" {
+					parts = append(parts,
+						"[Thinking]\n"+thinking+"\n[/Thinking]")
+				}
+			case "toolCall":
+				hasToolUse = true
+				id := block.Get("id").Str
+				name := block.Get("name").Str
+				argsRaw := block.Get("arguments").Raw
+				// Normalize Pi's agent__intent / _i field to
+				// "description" so the frontend can use a single
+				// params.description check across all agents.
+				argsRaw = normalizePiIntent(argsRaw)
+				toolCalls = append(toolCalls, ParsedToolCall{
+					ToolUseID: id,
+					ToolName:  name,
+					Category:  NormalizeToolCategory(name),
+					InputJSON: argsRaw,
+				})
+				parts = append(parts, formatPiToolUse(
+					name, argsRaw,
+				))
+			}
+			return true
+		})
+	}
+
+	content := strings.Join(parts, "\n")
+	ts := piTimestamp(line)
+
+	pm := &ParsedMessage{
+		Ordinal:          ordinal,
+		Role:             RoleAssistant,
+		SourceType:       "assistant",
+		SourceUUID:       sourceUUID,
+		SourceParentUUID: sourceParentUUID,
+		Content:          content,
+		Timestamp:        ts,
+		HasThinking:      hasThinking,
+		HasToolUse:       hasToolUse,
+		ContentLength:    len(content),
+		ToolCalls:        toolCalls,
+	}
+	applyPiTokenUsage(pm, line, fallbackModel)
+	return pm
+}
+
+// applyPiTokenUsage extracts the assistant message's model and
+// per-message token counts from a Pi JSONL line. Pi records
+// usage as a flat object under message.usage with provider-
+// agnostic input/output keys plus optional cache breakdowns.
+// Cache fields are read from both the nested cache.{read,write}
+// shape (OpenCode-style) and the flat cacheRead/cacheCreation/cacheWrite
+// shapes used across Pi-family producers.
+//
+// Coverage semantics match the claude parser contract: a field
+// present at zero is preserved as "known zero" and sets its
+// coverage flag, while a usage object with no recognized
+// fields (empty `{}` or a foreign schema) leaves TokenUsage
+// empty so the usage query filter skips the row.
+func applyPiTokenUsage(
+	pm *ParsedMessage, line, fallbackModel string,
+) {
+	if model := gjson.Get(line, "message.model").Str; model != "" {
+		pm.Model = model
+	} else if fallbackModel != "" {
+		pm.Model = fallbackModel
+	}
+
+	usage := gjson.Get(line, "message.usage")
+	applyPiUsage(pm, usage)
+}
+
+func applyPiUsage(pm *ParsedMessage, usage gjson.Result) {
+	if !usage.Exists() {
+		return
+	}
+
+	inputField := usage.Get("input")
+	outputField := usage.Get("output")
+	cacheReadField := usage.Get("cache.read")
+	if !cacheReadField.Exists() {
+		cacheReadField = usage.Get("cacheRead")
+	}
+	cacheWriteField := usage.Get("cache.write")
+	if !cacheWriteField.Exists() {
+		cacheWriteField = usage.Get("cacheCreation")
+	}
+	if !cacheWriteField.Exists() {
+		cacheWriteField = usage.Get("cacheWrite")
+	}
+
+	if !inputField.Exists() && !outputField.Exists() &&
+		!cacheReadField.Exists() && !cacheWriteField.Exists() {
+		return
+	}
+
+	input := int(inputField.Int())
+	output := int(outputField.Int())
+	cacheRead := int(cacheReadField.Int())
+	cacheCreate := int(cacheWriteField.Int())
+
+	normalized := map[string]int{
+		"input_tokens":                input,
+		"output_tokens":               output,
+		"cache_read_input_tokens":     cacheRead,
+		"cache_creation_input_tokens": cacheCreate,
+	}
+	j, err := json.Marshal(normalized)
+	if err != nil {
+		return
+	}
+	pm.TokenUsage = j
+	pm.OutputTokens = output
+	pm.HasOutputTokens = outputField.Exists()
+	pm.ContextTokens = input + cacheRead + cacheCreate
+	pm.HasContextTokens = inputField.Exists() ||
+		cacheReadField.Exists() || cacheWriteField.Exists()
+}
+
+// parsePiToolResultMessage parses a message entry with role="toolResult".
+// Returns nil if the entry is malformed.
+func parsePiToolResultMessage(
+	line string, ordinal int, sourceUUID, sourceParentUUID string,
+) *ParsedMessage {
+	toolUseID := gjson.Get(line, "message.toolCallId").Str
+	content := gjson.Get(line, "message.content")
+	contentLen := toolResultContentLength(content)
+
+	ts := piTimestamp(line)
+
+	return &ParsedMessage{
+		Ordinal:          ordinal,
+		Role:             RoleUser,
+		SourceType:       "toolResult",
+		SourceUUID:       sourceUUID,
+		SourceParentUUID: sourceParentUUID,
+		Timestamp:        ts,
+		ToolResults: []ParsedToolResult{
+			{
+				ToolUseID:     toolUseID,
+				ContentLength: contentLen,
+				ContentRaw:    content.Raw,
+			},
+		},
+	}
+}
+
+func parsePiCompactionMessage(
+	line string, ordinal int, sourceUUID, sourceParentUUID string,
+) *ParsedMessage {
+	summary := gjson.Get(line, "summary").Str
+	ts := parseTimestamp(gjson.Get(line, "timestamp").Str)
+	return &ParsedMessage{
+		Ordinal:           ordinal,
+		Role:              RoleAssistant,
+		Content:           summary,
+		Timestamp:         ts,
+		IsSystem:          true,
+		ContentLength:     len(summary),
+		SourceType:        "system",
+		SourceSubtype:     "compact_boundary",
+		SourceUUID:        sourceUUID,
+		SourceParentUUID:  sourceParentUUID,
+		IsCompactBoundary: true,
+	}
+}
+
+// formatPiToolUse constructs a synthetic block with "input" mapped from
+// Pi's "arguments" field and delegates to formatToolUse. This avoids
+// duplicating the tool-name switch logic.
+func formatPiToolUse(name, argsRaw string) string {
+	// Build {"name":"<name>","input":<args>} so formatToolUse can
+	// read input.* paths as usual.
+	var sb strings.Builder
+	sb.WriteString(`{"name":`)
+	nameJSON, _ := json.Marshal(name)
+	sb.Write(nameJSON)
+	sb.WriteString(`,"input":`)
+	if argsRaw == "" {
+		sb.WriteString("{}")
+	} else {
+		sb.WriteString(argsRaw)
+	}
+	sb.WriteByte('}')
+	return formatToolUse(gjson.Parse(sb.String()))
+}
+
+// normalizePiIntent rewrites Pi's agent__intent or _i argument field to
+// "description" so the frontend can use a uniform params.description check
+// across all agents. Returns the original JSON unchanged if neither field
+// is present or if "description" already exists.
+func normalizePiIntent(argsRaw string) string {
+	if argsRaw == "" {
+		return argsRaw
+	}
+	// Don't overwrite an existing description field.
+	if gjson.Get(argsRaw, "description").Exists() {
+		return argsRaw
+	}
+	intent := gjson.Get(argsRaw, "agent__intent")
+	if !intent.Exists() {
+		intent = gjson.Get(argsRaw, "_i")
+	}
+	if !intent.Exists() {
+		return argsRaw
+	}
+	// Unmarshal into a map, rename the intent key to "description",
+	// and re-marshal to produce valid JSON with proper escaping.
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(argsRaw), &m); err != nil {
+		return argsRaw
+	}
+	if v, ok := m["agent__intent"]; ok {
+		m["description"] = v
+	} else if v, ok := m["_i"]; ok {
+		m["description"] = v
+	} else {
+		return argsRaw
+	}
+	delete(m, "agent__intent")
+	delete(m, "_i")
+	out, err := json.Marshal(m)
+	if err != nil {
+		return argsRaw
+	}
+	return string(out)
+}
+
+// piTimestamp extracts the timestamp for a pi JSONL entry.
+// Tries the top-level "timestamp" field first (ISO 8601), then
+// falls back to "message.timestamp" as Unix milliseconds.
+func piTimestamp(line string) time.Time {
+	if ts := parseTimestamp(gjson.Get(line, "timestamp").Str); !ts.IsZero() {
+		return ts
+	}
+	if ms := gjson.Get(line, "message.timestamp").Int(); ms != 0 {
+		return time.UnixMilli(ms).UTC()
+	}
+	return time.Time{}
+}
+
+// ompParentHeaderSessionID returns the parent OMP session's stored raw ID for a
+// nested subagent transcript, or "" when childPath is not a nested subagent.
+// OMP stores subagents in a directory named after the parent transcript (minus
+// the .jsonl extension), so the parent transcript is the containing directory
+// plus ".jsonl". The ID resolution mirrors parent parsing: prefer the header
+// id, but support V1 parent transcripts by falling back to the parent filename.
+func ompParentHeaderSessionID(childPath string) string {
+	parent := filepath.Dir(childPath) + ".jsonl"
+	parentID, ok := piSessionHeaderID(parent)
+	if !ok {
+		return ""
+	}
+	if parentID != "" {
+		return parentID
+	}
+	return strings.TrimSuffix(filepath.Base(parent), ".jsonl")
+}
+
+// piSessionHeaderID reads path's session header id, skipping a leading OMP
+// title slot line. The boolean reports whether the file has a valid pi session
+// header. os.Open intentionally follows symlinks to supported transcripts.
+func piSessionHeaderID(path string) (string, bool) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", false
+	}
+	defer f.Close()
+	s := bufio.NewScanner(f)
+	s.Buffer(make([]byte, 0, 64*1024), 64*1024*1024)
+	for s.Scan() {
+		line := strings.TrimSpace(s.Text())
+		if line == "" {
+			continue
+		}
+		if gjson.Get(line, "type").Str == "title" {
+			continue
+		}
+		if gjson.Get(line, "type").Str != "session" {
+			return "", false
+		}
+		return gjson.Get(line, "id").Str, true
+	}
+	return "", false
+}

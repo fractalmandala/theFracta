@@ -1,0 +1,807 @@
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+} from "vite-plus/test";
+import { commitsDisagree, sync } from "./sync.svelte.js";
+import type { SyncStats, UpdateCheck } from "../api/types.js";
+
+const api = vi.hoisted(() => ({
+  triggerSync: vi.fn(),
+  triggerResync: vi.fn(),
+  watchSession: vi.fn(),
+  getSyncStatus: vi.fn(),
+  getStats: vi.fn(),
+  getVersion: vi.fn(),
+  checkForUpdate: vi.fn(),
+  isRemoteConnection: vi.fn(),
+  setEventsAvailable: vi.fn(),
+  ApiError: class MockGeneratedApiError extends Error {
+    status: number;
+
+    constructor(status: number, message: string) {
+      super(message);
+      this.name = "ApiError";
+      this.status = status;
+    }
+  },
+}));
+
+vi.mock("../api/client.js", () => ({
+  triggerSync: api.triggerSync,
+  triggerResync: api.triggerResync,
+  watchSession: api.watchSession,
+}));
+
+vi.mock("../api/runtime.js", () => ({
+  configureGeneratedClient: vi.fn(),
+  callGenerated: vi.fn((request: () => Promise<unknown>) => request()),
+  isRemoteConnection: api.isRemoteConnection,
+}));
+
+vi.mock("../api/generated/index", () => ({
+  ApiError: api.ApiError,
+  MetadataService: {
+    getApiV1Stats: vi.fn((params) => api.getStats(params)),
+    getApiV1Version: vi.fn(() => api.getVersion()),
+    getApiV1UpdateCheck: vi.fn(() => api.checkForUpdate()),
+  },
+  SyncService: {
+    getApiV1SyncStatus: vi.fn(() => api.getSyncStatus()),
+  },
+}));
+
+vi.mock("./events.svelte.js", () => ({
+  events: {
+    setAvailable: api.setEventsAvailable,
+  },
+}));
+
+const MOCK_STATS: SyncStats = {
+  synced: 5,
+  skipped: 3,
+  failed: 0,
+  total_sessions: 8,
+};
+
+function mockResyncSuccess(): void {
+  vi.mocked(api.triggerResync).mockReturnValue({
+    abort: vi.fn(),
+    done: Promise.resolve(MOCK_STATS),
+  });
+  vi.mocked(api.getStats).mockResolvedValue({
+    session_count: 8,
+    message_count: 100,
+    project_count: 3,
+    machine_count: 1,
+    earliest_session: null,
+  });
+  // triggerResync schedules loadStatus() as a side effect.
+  // loadStatus() reads getSyncStatus and unconditionally sets
+  // lastSyncStats from the response, so mirror MOCK_STATS here so
+  // the post-resync state matches what the resync just produced.
+  vi.mocked(api.getSyncStatus).mockResolvedValue({
+    last_sync: "2024-01-01T00:00:00Z",
+    stats: MOCK_STATS,
+  });
+}
+
+function mockResyncFailure(error: Error): void {
+  vi.mocked(api.triggerResync).mockReturnValue({
+    abort: vi.fn(),
+    done: Promise.reject(error),
+  });
+}
+
+describe("commitsDisagree", () => {
+  it.each([
+    // Unknown / undefined handling
+    { expected: false, hash1: "unknown", hash2: "unknown", scenario: "both are unknown" },
+    { expected: false, hash1: "unknown", hash2: "abc1234", scenario: "frontend is unknown" },
+    { expected: false, hash1: "abc1234", hash2: "unknown", scenario: "server is unknown" },
+    { expected: false, hash1: undefined, hash2: "abc1234", scenario: "first hash is undefined" },
+    { expected: false, hash1: "abc1234", hash2: undefined, scenario: "second hash is undefined" },
+    { expected: false, hash1: undefined, hash2: undefined, scenario: "both hashes are undefined" },
+
+    // Empty strings
+    { expected: false, hash1: "", hash2: "abc1234", scenario: "first hash is empty" },
+    { expected: false, hash1: "abc1234", hash2: "", scenario: "second hash is empty" },
+    { expected: false, hash1: "", hash2: "", scenario: "both hashes are empty" },
+
+    // Matches
+    { expected: false, hash1: "abc1234", hash2: "abc1234", scenario: "identical short hashes" },
+    { expected: false, hash1: "abc1234", hash2: "abc1234def5678", scenario: "short matches full SHA prefix" },
+    { expected: false, hash1: "abc1234aaaaaaaaaaaa", hash2: "abc1234aaaaaaaaaaaa", scenario: "identical full SHAs" },
+    { expected: false, hash1: "abc12", hash2: "abc1234def5678", scenario: "short abbreviation matching prefix" },
+
+    // Mismatches
+    { expected: true, hash1: "abc1234", hash2: "def5678", scenario: "different hashes" },
+    { expected: true, hash1: "abc1234aaaaaaaaaaaa", hash2: "def5678bbbbbbbbbbb", scenario: "full SHAs differ" },
+    { expected: true, hash1: "abc1234aaaaaaaaaaaa", hash2: "abc1234bbbbbbbbbbb", scenario: "full SHAs share 7-char prefix" },
+    { expected: true, hash1: "xyz99", hash2: "abc1234def5678", scenario: "short abbreviation not matching" },
+  ])(
+    "returns $expected when $scenario",
+    ({ expected, hash1, hash2 }) => {
+      expect(commitsDisagree(hash1, hash2)).toBe(expected);
+    },
+  );
+});
+
+describe("SyncStore.loadStats", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    const s = sync as unknown as Record<string, unknown>;
+    s.stats = null;
+    s.serverVersion = null;
+  });
+
+  it("discards stale response when a newer request exists", async () => {
+    const older = {
+      session_count: 10,
+      message_count: 50,
+      project_count: 2,
+      machine_count: 1,
+      earliest_session: null,
+    };
+    const newer = {
+      session_count: 5,
+      message_count: 30,
+      project_count: 1,
+      machine_count: 1,
+      earliest_session: null,
+    };
+
+    let resolveOlder!: (v: typeof older) => void;
+    let resolveNewer!: (v: typeof newer) => void;
+
+    vi.mocked(api.getStats)
+      .mockReturnValueOnce(
+        new Promise((r) => {
+          resolveOlder = r;
+        }),
+      )
+      .mockReturnValueOnce(
+        new Promise((r) => {
+          resolveNewer = r;
+        }),
+      );
+
+    // Start first request (include one-shot).
+    const p1 = sync.loadStats({ includeOneShot: true });
+    // Start second request (exclude one-shot) before first resolves.
+    const p2 = sync.loadStats({});
+
+    // Resolve newer first, then older.
+    resolveNewer(newer);
+    await p2;
+    expect(sync.stats).toEqual(newer);
+
+    // Now resolve the older request — it should be discarded.
+    resolveOlder(older);
+    await p1;
+    expect(sync.stats).toEqual(newer);
+  });
+
+  it("ignores stale failure when a newer request succeeds", async () => {
+    const newer = {
+      session_count: 5,
+      message_count: 30,
+      project_count: 1,
+      machine_count: 1,
+      earliest_session: null,
+    };
+
+    let rejectOlder!: (err: Error) => void;
+    let resolveNewer!: (v: typeof newer) => void;
+
+    vi.mocked(api.getStats)
+      .mockReturnValueOnce(
+        new Promise((_, reject) => {
+          rejectOlder = reject;
+        }),
+      )
+      .mockReturnValueOnce(
+        new Promise((r) => {
+          resolveNewer = r;
+        }),
+      );
+
+    const p1 = sync.loadStats({ includeOneShot: true });
+    const p2 = sync.loadStats({});
+
+    resolveNewer(newer);
+    await p2;
+    expect(sync.stats).toEqual(newer);
+    expect(sync.backendDegraded).toBe(false);
+
+    rejectOlder(new api.ApiError(503, "stale pg outage"));
+    await p1;
+    expect(sync.stats).toEqual(newer);
+    expect(sync.backendDegraded).toBe(false);
+  });
+});
+
+describe("SyncStore.triggerSync", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    const s = sync as unknown as Record<string, unknown>;
+    s.syncing = false;
+    s.progress = null;
+    s.lastSync = null;
+    s.lastSyncStats = null;
+    s.serverVersion = null;
+    s.statusHydrated = false;
+    s.pendingHydration = false;
+    s.syncCompleteListeners = [];
+  });
+
+  it("refreshes read-only data without starting a sync", async () => {
+    const s = sync as unknown as Record<string, unknown>;
+    s.serverVersion = {
+      build_date: "",
+      commit: "unknown",
+      read_only: true,
+      version: "dev",
+    };
+    const stats = {
+      earliest_session: null,
+      machine_count: 1,
+      message_count: 100,
+      project_count: 3,
+      session_count: 8,
+    };
+    vi.mocked(api.getStats).mockResolvedValue(stats);
+    vi.mocked(api.getSyncStatus).mockResolvedValue({
+      last_sync: "2024-01-01T00:00:00Z",
+      stats: MOCK_STATS,
+    });
+    const onComplete = vi.fn();
+    const listener = vi.fn();
+    sync.onSyncComplete(listener);
+
+    sync.triggerSync(onComplete);
+
+    expect(api.triggerSync).not.toHaveBeenCalled();
+    await vi.waitFor(() => {
+      expect(onComplete).toHaveBeenCalled();
+    });
+    expect(api.getSyncStatus).toHaveBeenCalled();
+    expect(api.getStats).toHaveBeenCalled();
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(sync.lastSync).toBe("2024-01-01T00:00:00Z");
+    expect(sync.lastSyncStats).toEqual(MOCK_STATS);
+    expect(sync.stats).toEqual(stats);
+    expect(sync.syncing).toBe(false);
+  });
+});
+
+describe("SyncStore.triggerResync", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Reset singleton state between tests.
+    const s = sync as unknown as Record<string, unknown>;
+    s.syncing = false;
+    s.progress = null;
+    s.serverVersion = null;
+    s.syncCompleteListeners = [];
+  });
+
+  it("returns false when already syncing", () => {
+    mockResyncSuccess();
+    const first = sync.triggerResync();
+    expect(first).toBe(true);
+    expect(sync.syncing).toBe(true);
+
+    const second = sync.triggerResync();
+    expect(second).toBe(false);
+  });
+
+  it("calls onError on stream failure", async () => {
+    const error = new Error("stream failed");
+    mockResyncFailure(error);
+
+    const onError = vi.fn();
+    sync.triggerResync(undefined, onError);
+
+    await vi.waitFor(() => {
+      expect(onError).toHaveBeenCalledWith(error);
+    });
+    expect(sync.syncing).toBe(false);
+  });
+
+  it("resets syncing on non-Error rejection", async () => {
+    vi.mocked(api.triggerResync).mockReturnValue({
+      abort: vi.fn(),
+      done: Promise.reject("string error"),
+    });
+
+    const onError = vi.fn();
+    sync.triggerResync(undefined, onError);
+
+    await vi.waitFor(() => {
+      expect(onError).toHaveBeenCalled();
+    });
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "Sync failed" }),
+    );
+    expect(sync.syncing).toBe(false);
+  });
+
+  it("allows retry after error", async () => {
+    mockResyncFailure(new Error("fail"));
+    const onError = vi.fn();
+    sync.triggerResync(undefined, onError);
+
+    await vi.waitFor(() => {
+      expect(onError).toHaveBeenCalled();
+    });
+
+    // Retry should succeed
+    mockResyncSuccess();
+    const onComplete = vi.fn();
+    const started = sync.triggerResync(onComplete);
+    expect(started).toBe(true);
+
+    await vi.waitFor(() => {
+      expect(onComplete).toHaveBeenCalled();
+    });
+    expect(sync.syncing).toBe(false);
+  });
+
+  it("calls onComplete on success", async () => {
+    mockResyncSuccess();
+    const onComplete = vi.fn();
+    sync.triggerResync(onComplete);
+
+    await vi.waitFor(() => {
+      expect(onComplete).toHaveBeenCalled();
+    });
+    expect(sync.syncing).toBe(false);
+    expect(sync.lastSyncStats).toEqual(MOCK_STATS);
+  });
+
+  it("rejects full resync for read-only backends", () => {
+    const s = sync as unknown as Record<string, unknown>;
+    s.serverVersion = {
+      build_date: "",
+      commit: "unknown",
+      read_only: true,
+      version: "dev",
+    };
+    const onError = vi.fn();
+
+    const started = sync.triggerResync(undefined, onError);
+
+    expect(started).toBe(false);
+    expect(api.triggerResync).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message:
+          "Full resync is unavailable for read-only backends.",
+      }),
+    );
+  });
+});
+
+describe("SyncStore.checkForUpdate", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    const s = sync as unknown as Record<string, unknown>;
+    s.updateAvailable = false;
+    s.latestVersion = null;
+  });
+
+  it("skips API call when isDesktop is true", async () => {
+    const s = sync as unknown as Record<string, unknown>;
+    // Temporarily override isDesktop
+    const original = s.isDesktop;
+    Object.defineProperty(sync, "isDesktop", {
+      value: true,
+      writable: true,
+      configurable: true,
+    });
+
+    await sync.checkForUpdate();
+
+    expect(api.checkForUpdate).not.toHaveBeenCalled();
+    expect(sync.updateAvailable).toBe(false);
+
+    Object.defineProperty(sync, "isDesktop", {
+      value: original,
+      writable: true,
+      configurable: true,
+    });
+  });
+
+  it("calls API and sets state when not desktop", async () => {
+    const mockResult: UpdateCheck = {
+      update_available: true,
+      current_version: "v0.9.0",
+      latest_version: "v1.0.0",
+    };
+    vi.mocked(api.checkForUpdate).mockResolvedValue(
+      mockResult,
+    );
+
+    const s = sync as unknown as Record<string, unknown>;
+    const original = s.isDesktop;
+    Object.defineProperty(sync, "isDesktop", {
+      value: false,
+      writable: true,
+      configurable: true,
+    });
+
+    await sync.checkForUpdate();
+
+    expect(api.checkForUpdate).toHaveBeenCalled();
+    expect(sync.updateAvailable).toBe(true);
+    expect(sync.latestVersion).toBe("v1.0.0");
+
+    Object.defineProperty(sync, "isDesktop", {
+      value: original,
+      writable: true,
+      configurable: true,
+    });
+  });
+});
+
+describe("SyncStore.remoteUnreachable", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    const s = sync as unknown as Record<string, unknown>;
+    s.remoteUnreachable = false;
+    s.backendDegraded = false;
+    s.backendDegradedMessage = null;
+    s.statusHydrated = false;
+  });
+
+  it("flags unreachable when a remote load fails", async () => {
+    vi.mocked(api.isRemoteConnection).mockReturnValue(true);
+    vi.mocked(api.getSyncStatus).mockRejectedValue(
+      new TypeError("Failed to fetch"),
+    );
+
+    await sync.loadStatus();
+
+    expect(sync.remoteUnreachable).toBe(true);
+  });
+
+  it("clears the flag when a remote load succeeds", async () => {
+    vi.mocked(api.isRemoteConnection).mockReturnValue(true);
+    const s = sync as unknown as Record<string, unknown>;
+    s.remoteUnreachable = true;
+    vi.mocked(api.getSyncStatus).mockResolvedValue({
+      last_sync: "",
+      stats: MOCK_STATS,
+    });
+
+    await sync.loadStatus();
+
+    expect(sync.remoteUnreachable).toBe(false);
+  });
+
+  it("adopts in-flight progress from sync status polling", async () => {
+    const s = sync as unknown as Record<string, unknown>;
+    s.syncing = false;
+    s.progress = null;
+    s.serverVersion = {
+      build_date: "",
+      commit: "abc123",
+      read_only: false,
+      version: "dev",
+    };
+    vi.mocked(api.getSyncStatus).mockResolvedValue({
+      last_sync: "",
+      stats: MOCK_STATS,
+      progress: {
+        phase: "rebuilding_search",
+        detail: "Rebuilding search index",
+        hint: "Rebuilding the search index may take a while on large archives.",
+        resync: true,
+        current_project: "",
+        projects_total: 0,
+        projects_done: 0,
+        sessions_total: 0,
+        sessions_done: 0,
+        messages_indexed: 0,
+      },
+    });
+
+    await sync.loadStatus();
+
+    expect(sync.syncing).toBe(true);
+    expect(sync.progress?.phase).toBe("rebuilding_search");
+    expect(sync.progress?.detail).toBe("Rebuilding search index");
+    expect(sync.progress?.hint).toContain("may take a while");
+  });
+
+  it("does not notify completion while status polling still reports progress", async () => {
+    const s = sync as unknown as Record<string, unknown>;
+    s.syncing = false;
+    s.progress = null;
+    s.lastSync = "2024-01-01T00:01:00Z";
+    s.statusHydrated = true;
+    s.pendingHydration = false;
+    s.syncCompleteListeners = [];
+    s.serverVersion = {
+      build_date: "",
+      commit: "abc123",
+      read_only: false,
+      version: "dev",
+    };
+    const listener = vi.fn();
+    sync.onSyncComplete(listener);
+    vi.mocked(api.getSyncStatus).mockResolvedValue({
+      last_sync: "2024-01-01T00:01:00Z",
+      stats: MOCK_STATS,
+      progress: {
+        phase: "rebuilding_search",
+        detail: "Rebuilding search index",
+        hint: "Rebuilding the search index may take a while on large archives.",
+        resync: true,
+        projects_total: 0,
+        projects_done: 0,
+        sessions_total: 0,
+        sessions_done: 0,
+        messages_indexed: 0,
+      },
+    });
+
+    await sync.loadStatus();
+
+    expect(api.getStats).not.toHaveBeenCalled();
+    expect(listener).not.toHaveBeenCalled();
+    expect(sync.syncing).toBe(true);
+  });
+
+  it("clears status-driven progress when polling reports no active sync", async () => {
+    const s = sync as unknown as Record<string, unknown>;
+    s.syncing = true;
+    s.progress = {
+      phase: "rebuilding_search",
+      detail: "Rebuilding search index",
+      hint: "Rebuilding the search index may take a while on large archives.",
+      resync: true,
+      projects_total: 0,
+      projects_done: 0,
+      sessions_total: 0,
+      sessions_done: 0,
+      messages_indexed: 0,
+    };
+    s.statusProgressActive = true;
+    s.serverVersion = {
+      build_date: "",
+      commit: "abc123",
+      read_only: false,
+      version: "dev",
+    };
+    vi.mocked(api.getSyncStatus).mockResolvedValue({
+      last_sync: "2024-01-01T00:00:00Z",
+      stats: MOCK_STATS,
+    });
+
+    await sync.loadStatus();
+
+    expect(sync.syncing).toBe(false);
+    expect(sync.progress).toBeNull();
+  });
+
+  it("notifies completion when status-driven progress clears", async () => {
+    const s = sync as unknown as Record<string, unknown>;
+    s.syncing = true;
+    s.progress = {
+      phase: "rebuilding_search",
+      detail: "Rebuilding search index",
+      hint: "Rebuilding the search index may take a while on large archives.",
+      resync: true,
+      projects_total: 0,
+      projects_done: 0,
+      sessions_total: 0,
+      sessions_done: 0,
+      messages_indexed: 0,
+    };
+    s.statusProgressActive = true;
+    s.lastSync = "2024-01-01T00:01:00Z";
+    s.statusHydrated = true;
+    s.pendingHydration = false;
+    s.syncCompleteListeners = [];
+    s.serverVersion = {
+      build_date: "",
+      commit: "abc123",
+      read_only: false,
+      version: "dev",
+    };
+    const stats = {
+      earliest_session: null,
+      machine_count: 1,
+      message_count: 100,
+      project_count: 3,
+      session_count: 8,
+    };
+    vi.mocked(api.getStats).mockResolvedValue(stats);
+    const listener = vi.fn();
+    sync.onSyncComplete(listener);
+    vi.mocked(api.getSyncStatus).mockResolvedValue({
+      last_sync: "2024-01-01T00:01:00Z",
+      stats: MOCK_STATS,
+    });
+
+    await sync.loadStatus();
+
+    expect(api.getStats).toHaveBeenCalled();
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(sync.syncing).toBe(false);
+    expect(sync.progress).toBeNull();
+  });
+
+  it("does not flag unreachable for local connections", async () => {
+    vi.mocked(api.isRemoteConnection).mockReturnValue(false);
+    vi.mocked(api.getSyncStatus).mockRejectedValue(
+      new TypeError("Failed to fetch"),
+    );
+
+    await sync.loadStatus();
+
+    expect(sync.remoteUnreachable).toBe(false);
+  });
+
+  it("flags backend degraded instead of unreachable on 5xx", async () => {
+    vi.mocked(api.isRemoteConnection).mockReturnValue(true);
+    vi.mocked(api.getSyncStatus).mockRejectedValue(
+      new api.ApiError(503, "pg unavailable"),
+    );
+
+    await sync.loadStatus();
+
+    expect(sync.remoteUnreachable).toBe(false);
+    expect(sync.backendDegraded).toBe(true);
+    expect(sync.backendDegradedMessage).toBe("sync not ready");
+  });
+
+  it("keeps backend degraded when status recovers", async () => {
+    vi.mocked(api.isRemoteConnection).mockReturnValue(true);
+    const s = sync as unknown as Record<string, unknown>;
+    s.backendDegraded = true;
+    s.backendDegradedMessage = "sync not ready";
+    vi.mocked(api.getSyncStatus).mockResolvedValue({
+      last_sync: "",
+      stats: MOCK_STATS,
+    });
+    vi.mocked(api.getStats).mockRejectedValue(
+      new api.ApiError(503, "pg unavailable"),
+    );
+
+    await sync.loadStatus();
+
+    expect(sync.remoteUnreachable).toBe(false);
+    expect(sync.backendDegraded).toBe(true);
+    expect(sync.backendDegradedMessage).toBe("sync not ready");
+  });
+
+  it("retries stats when status loads while backend is degraded", async () => {
+    vi.mocked(api.isRemoteConnection).mockReturnValue(true);
+    const s = sync as unknown as Record<string, unknown>;
+    s.backendDegraded = true;
+    s.backendDegradedMessage = "sync not ready";
+    vi.mocked(api.getSyncStatus).mockResolvedValue({
+      last_sync: "",
+      stats: MOCK_STATS,
+    });
+    vi.mocked(api.getStats).mockResolvedValue({
+      earliest_session: null,
+      machine_count: 1,
+      message_count: 100,
+      project_count: 3,
+      session_count: 8,
+    });
+
+    await sync.loadStatus();
+
+    expect(api.getStats).toHaveBeenCalled();
+    expect(sync.backendDegraded).toBe(false);
+    expect(sync.backendDegradedMessage).toBeNull();
+  });
+
+  it("keeps backend degraded when version loads", async () => {
+    vi.mocked(api.isRemoteConnection).mockReturnValue(true);
+    const s = sync as unknown as Record<string, unknown>;
+    s.backendDegraded = true;
+    s.backendDegradedMessage = "sync not ready";
+    vi.mocked(api.getVersion).mockResolvedValue({
+      build_date: "",
+      commit: "abc123",
+      version: "dev",
+    });
+
+    await sync.loadVersion();
+
+    expect(sync.remoteUnreachable).toBe(false);
+    expect(sync.backendDegraded).toBe(true);
+    expect(sync.backendDegradedMessage).toBe("sync not ready");
+  });
+
+  it("retries version mode detection after status recovers", async () => {
+    const s = sync as unknown as Record<string, unknown>;
+    s.serverVersion = null;
+    vi.mocked(api.getVersion)
+      .mockRejectedValueOnce(new Error("version temporarily unavailable"))
+      .mockResolvedValueOnce({
+        build_date: "",
+        commit: "abc123",
+        read_only: false,
+        version: "dev",
+      });
+    vi.mocked(api.getSyncStatus).mockResolvedValue({
+      last_sync: "",
+      stats: MOCK_STATS,
+    });
+
+    await sync.loadVersion();
+
+    expect(api.setEventsAvailable).not.toHaveBeenCalled();
+
+    await sync.loadStatus();
+
+    expect(api.getVersion).toHaveBeenCalledTimes(2);
+    expect(api.setEventsAvailable).toHaveBeenCalledWith(true);
+  });
+
+  it("keeps status health when opportunistic version retry fails", async () => {
+    vi.mocked(api.isRemoteConnection).mockReturnValue(true);
+    const s = sync as unknown as Record<string, unknown>;
+    s.serverVersion = null;
+    s.remoteUnreachable = true;
+    s.backendDegraded = false;
+    s.backendDegradedMessage = null;
+    vi.mocked(api.getSyncStatus).mockResolvedValue({
+      last_sync: "",
+      stats: MOCK_STATS,
+    });
+    vi.mocked(api.getVersion).mockRejectedValue(
+      new Error("version still unavailable"),
+    );
+
+    await sync.loadStatus();
+
+    expect(sync.remoteUnreachable).toBe(false);
+    expect(sync.backendDegraded).toBe(false);
+    expect(sync.backendDegradedMessage).toBeNull();
+  });
+
+  it("clears backend degraded when stats load succeeds", async () => {
+    vi.mocked(api.isRemoteConnection).mockReturnValue(true);
+    const s = sync as unknown as Record<string, unknown>;
+    s.backendDegraded = true;
+    s.backendDegradedMessage = "sync not ready";
+    vi.mocked(api.getStats).mockResolvedValue({
+      earliest_session: null,
+      machine_count: 1,
+      message_count: 100,
+      project_count: 3,
+      session_count: 8,
+    });
+
+    await sync.loadStats();
+
+    expect(sync.backendDegraded).toBe(false);
+    expect(sync.backendDegradedMessage).toBeNull();
+  });
+
+  it("clears backend degraded when the remote becomes unreachable", async () => {
+    vi.mocked(api.isRemoteConnection).mockReturnValue(true);
+    const s = sync as unknown as Record<string, unknown>;
+    s.backendDegraded = true;
+    s.backendDegradedMessage = "sync not ready";
+    vi.mocked(api.getSyncStatus).mockRejectedValue(
+      new TypeError("Failed to fetch"),
+    );
+
+    await sync.loadStatus();
+
+    expect(sync.backendDegraded).toBe(false);
+    expect(sync.backendDegradedMessage).toBeNull();
+    expect(sync.remoteUnreachable).toBe(true);
+  });
+});

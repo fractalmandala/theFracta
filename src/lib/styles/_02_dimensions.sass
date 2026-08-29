@@ -1,0 +1,129 @@
+// ============================================================================
+// dimensions — L1. The loop-generated half of the registry: 17 space families,
+// radius, size, viewport heights, shadows — each class in three bands (base,
+// -mob, -desk) per Contract 7. Presets are token-routed; literals are px.
+// ============================================================================
+
+@use 'sass:string'
+@use 'sass:list'
+@use '01_config' as *
+
+$lo: list.nth($utility-range, 1)
+$hi: list.nth($utility-range, 2)
+$steps: ('3xs' '2xs' 'xs' 'sm' 'md' 'lg' 'xl' '2xl' '3xl')
+
+$space-families: (gap: gap, rgap: row-gap, cgap: column-gap, pad: padding, pad-x: padding-inline, pad-y: padding-block, pad-top: padding-top, pad-right: padding-right, pad-bottom: padding-bottom, pad-left: padding-left, marg: margin, marg-x: margin-inline, marg-y: margin-block, marg-top: margin-top, marg-right: margin-right, marg-bottom: margin-bottom, marg-left: margin-left)
+
+// Negatives ride margin families only (Contract: `--` infix).
+$marg-families: (marg: margin, marg-x: margin-inline, marg-y: margin-block, marg-top: margin-top, marg-right: margin-right, marg-bottom: margin-bottom, marg-left: margin-left)
+
+// --- Base band ---------------------------------------------------------------
+@each $name, $prop in $space-families
+	@each $step in $steps
+		.#{$name}-#{$step}
+			#{$prop}: var(--space-#{$step})
+	@for $n from $lo through $hi
+		.#{$name}-#{$n}
+			#{$prop}: #{$n}px
+
+@each $name, $prop in $marg-families
+	@each $step in $steps
+		.#{$name}--#{$step}
+			#{$prop}: calc(var(--space-#{$step}) * -1)
+	@for $n from $lo through $hi
+		.#{$name}--#{$n}
+			#{$prop}: -#{$n}px
+
+// Radius — literal px (0 = the reset); never rides shape presets.
+@for $n from 0 through $hi
+	.radius-#{$n}
+		border-radius: #{$n}px
+
+.radius-full
+	border-radius: var(--radius-full)
+
+// Size
+@for $n from $lo through $hi
+	.w-#{$n}
+		width: #{$n}px
+	.h-#{$n}
+		height: #{$n}px
+	.square-#{$n}
+		width: #{$n}px
+		height: #{$n}px
+
+.wfull
+	width: 100%
+.hfull
+	height: 100%
+.full
+	width: 100%
+	height: 100%
+.min0
+	min-width: 0
+	min-height: 0
+
+// Viewport heights
+.hfull-vh
+	min-height: 100vh
+.hfull-vh-fitted
+	min-height: calc(100vh - var(--header-height, 48px))
+
+// Shadows — token channels; per-mode values live in tokens.
+.shadow-sm
+	box-shadow: var(--shadow-sm)
+.shadow-md
+	box-shadow: var(--shadow-md)
+.shadow-lg
+	box-shadow: var(--shadow-lg)
+
+// --- Responsive bands: -mob / -desk, generated wholesale (Contract 7) --------
+@each $mode, $query in $responsive-modes
+	@media #{string.unquote($query)}
+		@each $name, $prop in $space-families
+			@each $step in $steps
+				.#{$name}-#{$step}-#{$mode}
+					#{$prop}: var(--space-#{$step})
+			@for $n from $lo through $hi
+				.#{$name}-#{$n}-#{$mode}
+					#{$prop}: #{$n}px
+		@each $name, $prop in $marg-families
+			@each $step in $steps
+				.#{$name}--#{$step}-#{$mode}
+					#{$prop}: calc(var(--space-#{$step}) * -1)
+			@for $n from $lo through $hi
+				.#{$name}--#{$n}-#{$mode}
+					#{$prop}: -#{$n}px
+		@for $n from 0 through $hi
+			.radius-#{$n}-#{$mode}
+				border-radius: #{$n}px
+		.radius-full-#{$mode}
+			border-radius: var(--radius-full)
+		@for $n from $lo through $hi
+			.w-#{$n}-#{$mode}
+				width: #{$n}px
+			.h-#{$n}-#{$mode}
+				height: #{$n}px
+			.square-#{$n}-#{$mode}
+				width: #{$n}px
+				height: #{$n}px
+		.wfull-#{$mode}
+			width: 100%
+		.hfull-#{$mode}
+			height: 100%
+		.full-#{$mode}
+			width: 100%
+			height: 100%
+		.min0-#{$mode}
+			min-width: 0
+			min-height: 0
+		.hfull-vh-#{$mode}
+			min-height: 100vh
+		.hfull-vh-fitted-#{$mode}
+			min-height: calc(100vh - var(--header-height, 48px))
+		.shadow-sm-#{$mode}
+			box-shadow: var(--shadow-sm)
+		.shadow-md-#{$mode}
+			box-shadow: var(--shadow-md)
+		.shadow-lg-#{$mode}
+			box-shadow: var(--shadow-lg)

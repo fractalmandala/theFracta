@@ -1,0 +1,475 @@
+<script lang="ts">
+  import { analytics } from "../../stores/analytics.svelte.js";
+  import type { ToolCategoryCount } from "../../api/types.js";
+  import { m } from "../../i18n/index.js";
+
+  const CATEGORY_COLORS: Record<string, string> = {
+    Read: "#3b82f6",
+    Edit: "#f59e0b",
+    Write: "#10b981",
+    Bash: "#ef4444",
+    Grep: "#8b5cf6",
+    Glob: "#06b6d4",
+    Task: "#ec4899",
+    Other: "#6b7280",
+  };
+
+  function colorFor(category: string): string {
+    return CATEGORY_COLORS[category] ?? "#6b7280";
+  }
+
+  const categories = $derived(
+    analytics.tools?.by_category ?? [],
+  );
+
+  const maxCount = $derived(
+    categories.length > 0
+      ? Math.max(...categories.map((c) => c.count), 1)
+      : 1,
+  );
+
+  const trendEntries = $derived(analytics.tools?.trend ?? []);
+  const toolRows = $derived(analytics.tools?.by_tool ?? []);
+
+  const trendMax = $derived.by(() => {
+    let max = 1;
+    for (const entry of trendEntries) {
+      let total = 0;
+      for (const v of Object.values(entry.by_category)) {
+        total += v;
+      }
+      if (total > max) max = total;
+    }
+    return max;
+  });
+
+  function barWidth(count: number): number {
+    return (count / maxCount) * 100;
+  }
+
+  function trendBarHeight(total: number): number {
+    return Math.max((total / trendMax) * 100, 2);
+  }
+
+  function trendTotal(byCat: Record<string, number>): number {
+    let total = 0;
+    for (const v of Object.values(byCat)) {
+      total += v;
+    }
+    return total;
+  }
+
+  function formatWeek(date: string): string {
+    if (date.length < 10) return date;
+    return date.slice(5);
+  }
+
+  let tooltip = $state<{
+    x: number;
+    y: number;
+    text: string;
+  } | null>(null);
+
+  function handleCatHover(
+    e: MouseEvent,
+    cat: ToolCategoryCount,
+  ) {
+    const rect = (
+      e.currentTarget as HTMLElement
+    ).getBoundingClientRect();
+    tooltip = {
+      x: rect.left + rect.width / 2,
+      y: rect.top - 4,
+      text: `${cat.category}: ${cat.count.toLocaleString()} (${cat.pct}%)`,
+    };
+  }
+
+  function handleTrendHover(
+    e: MouseEvent,
+    entry: { date: string; by_category: Record<string, number> },
+  ) {
+    const rect = (
+      e.currentTarget as HTMLElement
+    ).getBoundingClientRect();
+    const total = trendTotal(entry.by_category);
+    const parts = Object.entries(entry.by_category)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 4)
+      .map(([cat, count]) => `${cat}: ${count}`);
+    tooltip = {
+      x: rect.left + rect.width / 2,
+      y: rect.top - 4,
+      text: m.analytics_tool_usage_trend_tooltip({
+        date: entry.date,
+        total,
+        parts: parts.join(", "),
+      }),
+    };
+  }
+
+  function handleLeave() {
+    tooltip = null;
+  }
+</script>
+
+<div class="tool-container">
+  <div class="tool-header">
+    <h3 class="chart-title">{m.analytics_tool_usage_title()}</h3>
+    {#if analytics.tools}
+      <span class="count">
+        {m.analytics_tool_usage_call_count({
+          count: analytics.tools.total_calls,
+          countLabel: analytics.tools.total_calls.toLocaleString(),
+        })}
+      </span>
+    {/if}
+  </div>
+
+  {#if analytics.errors.tools}
+    <div class="error">
+      {analytics.errors.tools}
+      <button
+        class="retry-btn"
+        onclick={() => analytics.fetchTools()}
+      >
+        {m.shared_retry()}
+      </button>
+    </div>
+  {:else if analytics.loading.tools}
+    <div class="empty">{m.analytics_tool_usage_loading()}</div>
+  {:else if categories.length > 0}
+    <div class="sections">
+      {#if toolRows.length > 0}
+        <div class="section">
+          <h4 class="section-title">
+            {m.analytics_tool_usage_top_tools()}
+          </h4>
+          <div class="tool-table">
+            {#each toolRows.slice(0, 8) as tool}
+              <div class="tool-row">
+                <span
+                  class="tool-dot"
+                  style="background: {colorFor(tool.category)}"
+                ></span>
+                <span class="tool-name" title={tool.tool_name}>
+                  {tool.tool_name}
+                </span>
+                <span class="tool-category">{tool.category}</span>
+                <span class="tool-count">
+                  {tool.call_count.toLocaleString()}
+                </span>
+                <span class="tool-sessions">
+                  {m.analytics_tool_usage_sessions({
+                    count: tool.session_count,
+                    countLabel: tool.session_count.toLocaleString(),
+                  })}
+                </span>
+                <span class="tool-pct">{tool.pct}%</span>
+              </div>
+            {/each}
+          </div>
+        </div>
+      {/if}
+
+      <div class="section">
+        <h4 class="section-title">{m.analytics_by_category()}</h4>
+        <div class="bar-list">
+          {#each categories as cat}
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div
+              class="bar-row"
+              onmouseenter={(e) => handleCatHover(e, cat)}
+              onmouseleave={handleLeave}
+            >
+              <span class="cat-name">{cat.category}</span>
+              <div class="bar-track">
+                <div
+                  class="bar-fill"
+                  style="width: {barWidth(cat.count)}%;
+                    background: {colorFor(cat.category)}"
+                ></div>
+              </div>
+              <span class="bar-value">
+                {cat.count.toLocaleString()}
+              </span>
+              <span class="bar-pct">{cat.pct}%</span>
+            </div>
+          {/each}
+        </div>
+      </div>
+
+      {#if trendEntries.length > 1}
+        <div class="section">
+          <h4 class="section-title">{m.analytics_weekly_trend()}</h4>
+          <div class="trend-chart">
+            {#each trendEntries as entry}
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <div
+                class="trend-bar-wrapper"
+                onmouseenter={(e) => handleTrendHover(e, entry)}
+                onmouseleave={handleLeave}
+              >
+                <div
+                  class="trend-bar"
+                  style="height: {trendBarHeight(trendTotal(entry.by_category))}%"
+                ></div>
+                <span class="trend-label">
+                  {formatWeek(entry.date)}
+                </span>
+              </div>
+            {/each}
+          </div>
+        </div>
+      {/if}
+    </div>
+
+    {#if tooltip}
+      <div
+        class="tooltip"
+        style="left: {tooltip.x}px; top: {tooltip.y}px;"
+      >
+        {tooltip.text}
+      </div>
+    {/if}
+  {:else}
+    <div class="empty">{m.analytics_tool_usage_empty()}</div>
+  {/if}
+</div>
+
+<style>
+  .tool-container {
+    position: relative;
+    flex: 1;
+  }
+
+  .tool-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+
+  .chart-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .count {
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+
+  .sections {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .section-title {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 6px;
+  }
+
+  .tool-table {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+
+  .tool-row {
+    display: grid;
+    grid-template-columns: 8px minmax(80px, 1fr) minmax(52px, 72px) 48px 72px 40px;
+    align-items: center;
+    gap: 8px;
+    min-height: 28px;
+    padding: 4px;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: 11px;
+  }
+
+  .tool-row:hover {
+    background: var(--bg-surface-hover);
+  }
+
+  .tool-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
+  .tool-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-primary);
+    font-weight: 500;
+  }
+
+  .tool-category {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-muted);
+  }
+
+  .tool-count,
+  .tool-sessions,
+  .tool-pct {
+    text-align: right;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+  }
+
+  @media (max-width: 640px) {
+    .tool-row {
+      grid-template-columns: 8px minmax(0, 1fr) 44px 36px;
+    }
+
+    .tool-category,
+    .tool-sessions {
+      display: none;
+    }
+  }
+
+  .bar-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .bar-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 4px;
+    border-radius: var(--radius-sm);
+    transition: background 0.1s;
+  }
+
+  .bar-row:hover {
+    background: var(--bg-surface-hover);
+  }
+
+  .cat-name {
+    flex-shrink: 0;
+    width: 60px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+
+  .bar-track {
+    flex: 1;
+    height: 14px;
+    background: var(--bg-inset);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    min-width: 2px;
+  }
+
+  .bar-value {
+    flex-shrink: 0;
+    width: 48px;
+    text-align: right;
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+  }
+
+  .bar-pct {
+    flex-shrink: 0;
+    width: 36px;
+    text-align: right;
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+  }
+
+  .trend-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-2);
+    height: 80px;
+    padding-top: 4px;
+  }
+
+  .trend-bar-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+    justify-content: flex-end;
+    cursor: default;
+  }
+
+  .trend-bar {
+    width: 100%;
+    max-width: 32px;
+    background: var(--accent-blue, #3b82f6);
+    border-radius: 2px 2px 0 0;
+    min-height: 2px;
+  }
+
+  .trend-bar-wrapper:hover .trend-bar {
+    opacity: 0.8;
+  }
+
+  .trend-label {
+    font-size: 8px;
+    color: var(--text-muted);
+    margin-top: 2px;
+    white-space: nowrap;
+  }
+
+  .tooltip {
+    position: fixed;
+    transform: translateX(-50%) translateY(-100%);
+    padding: 4px 8px;
+    background: var(--text-primary);
+    color: var(--bg-primary);
+    font-size: 10px;
+    border-radius: var(--radius-sm);
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: var(--z-tooltip);
+  }
+
+  .empty {
+    color: var(--text-muted);
+    font-size: 12px;
+    padding: 24px;
+    text-align: center;
+  }
+
+  .error {
+    color: var(--accent-red);
+    font-size: 12px;
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .retry-btn {
+    padding: 2px 8px;
+    border: 1px solid currentColor;
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    color: inherit;
+    cursor: pointer;
+  }
+</style>

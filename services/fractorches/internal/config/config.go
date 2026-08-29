@@ -1,0 +1,3031 @@
+package config
+
+import (
+	"bytes"
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"flag"
+	"fmt"
+	"log"
+	"maps"
+	"net"
+	"net/url"
+	"os"
+	"path/filepath"
+	"regexp"
+	"slices"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/BurntSushi/toml"
+	"github.com/gofrs/flock"
+	"github.com/spf13/pflag"
+	"go.kenn.io/agentsview/internal/parser"
+	"go.kenn.io/agentsview/internal/pathutil"
+)
+
+// TerminalConfig holds terminal launch preferences.
+type TerminalConfig struct {
+	// Mode: "auto" (detect terminal), "custom" (use CustomBin),
+	// or "clipboard" (never launch, always copy).
+	Mode string `json:"mode" toml:"mode"`
+	// CustomBin is the terminal binary path (used when Mode == "custom").
+	CustomBin string `json:"custom_bin,omitempty" toml:"custom_bin"`
+	// CustomArgs is a template for terminal args. Use {cmd} as
+	// placeholder for the resume command (e.g. "-- bash -c {cmd}").
+	CustomArgs string `json:"custom_args,omitempty" toml:"custom_args"`
+}
+
+// ProxyConfig controls an optional managed reverse proxy.
+type ProxyConfig struct {
+	// Mode enables a managed proxy implementation.
+	// Currently supported: "caddy".
+	Mode string `json:"mode,omitempty" toml:"mode"`
+	// Bin overrides the proxy executable path.
+	Bin string `json:"bin,omitempty" toml:"bin"`
+	// BindHost is the local interface/IP the proxy binds to.
+	BindHost string `json:"bind_host,omitempty" toml:"bind_host"`
+	// PublicPort is the external port exposed by the proxy.
+	PublicPort int `json:"public_port,omitempty" toml:"public_port"`
+	// TLSCert and TLSKey are used by managed HTTPS mode.
+	TLSCert string `json:"tls_cert,omitempty" toml:"tls_cert"`
+	TLSKey  string `json:"tls_key,omitempty" toml:"tls_key"`
+	// AllowedSubnets restrict inbound clients to these CIDRs.
+	AllowedSubnets []string `json:"allowed_subnets,omitempty" toml:"allowed_subnets"`
+}
+
+// PGConfig holds PostgreSQL connection settings.
+type PGConfig struct {
+	URL             string   `toml:"url" json:"url"`
+	Schema          string   `toml:"schema" json:"schema"`
+	MachineName     string   `toml:"machine_name" json:"machine_name"`
+	AllowInsecure   bool     `toml:"allow_insecure" json:"allow_insecure"`
+	Projects        []string `toml:"projects" json:"projects,omitempty"`
+	ExcludeProjects []string `toml:"exclude_projects" json:"exclude_projects,omitempty"`
+	// PushVectors gates the vector phase of pg push. A pointer so an
+	// absent key defaults to enabled without a load-time default pass.
+	PushVectors *bool `toml:"push_vectors" json:"push_vectors,omitempty"`
+}
+
+// PushVectorsEnabled reports whether pg push should run its vector phase
+// for this target; unset means enabled.
+func (p PGConfig) PushVectorsEnabled() bool {
+	return p.PushVectors == nil || *p.PushVectors
+}
+
+type pgEnvOverrides struct {
+	URL         string
+	Schema      string
+	MachineName string
+}
+
+// ResolvedPGTarget is one PostgreSQL target after target selection,
+// defaulting, and default-target env overrides are applied.
+type ResolvedPGTarget struct {
+	Name      string
+	Config    PGConfig
+	IsDefault bool
+}
+
+var pgConfigKeys = map[string]struct{}{
+	"url":              {},
+	"schema":           {},
+	"machine_name":     {},
+	"allow_insecure":   {},
+	"projects":         {},
+	"exclude_projects": {},
+	"push_vectors":     {},
+}
+
+// DuckDBConfig holds DuckDB mirror and Quack connection settings.
+type DuckDBConfig struct {
+	Path          string `toml:"path" json:"path"`
+	URL           string `toml:"url" json:"url"`
+	Token         string `toml:"token" json:"token,omitempty"`
+	MachineName   string `toml:"machine_name" json:"machine_name"`
+	AllowInsecure bool   `toml:"allow_insecure" json:"allow_insecure"`
+	// AttachTimeout bounds how long a remote Quack ATTACH (and its cheap TCP
+	// preflight) may run before the client gives up, so an unresponsive
+	// endpoint fails fast instead of hanging forever. Zero selects the
+	// package default; a negative value disables the guard.
+	AttachTimeout   time.Duration `toml:"attach_timeout" json:"attach_timeout,omitempty"`
+	Projects        []string      `toml:"projects" json:"projects,omitempty"`
+	ExcludeProjects []string      `toml:"exclude_projects" json:"exclude_projects,omitempty"`
+}
+
+// VectorConfig holds settings for the optional local semantic-search
+// vector index (embeddings + vectors.db).
+type VectorConfig struct {
+	Enabled bool   `toml:"enabled" json:"enabled"`
+	DBPath  string `toml:"db_path" json:"db_path,omitempty"`
+	// IncludeAutomated controls whether automated (e.g. roborev) sessions'
+	// messages are embedded into the vector index, mirroring the
+	// IncludeAutomated convention search already uses to exclude those
+	// sessions from results by default. Default false: automated sessions
+	// are excluded from embedding, since they otherwise dominate a large
+	// archive's index with content that search already hides by default.
+	// `embeddings build --include-automated` can override this for a
+	// one-off build; see that flag's help for the scheduled-build caveat.
+	IncludeAutomated bool                   `toml:"include_automated" json:"include_automated"`
+	Embeddings       VectorEmbeddingsConfig `toml:"embeddings" json:"embeddings"`
+	Embed            VectorEmbedConfig      `toml:"embed" json:"embed"`
+}
+
+// VectorEmbeddingsConfig describes the embedding space — the model identity
+// every server must share — and the named servers that can encode it.
+//
+// Model identity (model, dimension, request_dimensions, max_input_chars,
+// query_prefix, document_prefix, input_suffix) is deliberately global rather
+// than per-server: it joins the generation fingerprint, and query vectors are
+// only comparable to stored document vectors from the same space. Servers
+// differ only in transport and capacity, so a build run on any server produces
+// vectors every other server's queries can search.
+type VectorEmbeddingsConfig struct {
+	Model     string `toml:"model" json:"model"`
+	Dimension int    `toml:"dimension" json:"dimension"`
+	// RequestDimensions, when true, sends Dimension as the OpenAI-compatible
+	// "dimensions" request field — for documents at build time and queries at
+	// search time alike — asking the endpoint for Matryoshka-reduced vectors
+	// of exactly that length (e.g. Qwen3-Embedding through Ollama). Requires
+	// a model and endpoint that support dimension selection; when false (the
+	// default) the field is never sent and Dimension only validates response
+	// length. Part of the generation fingerprint: enabling it re-embeds the
+	// archive on the next build.
+	RequestDimensions bool `toml:"request_dimensions" json:"request_dimensions,omitempty"`
+	// MaxInputChars caps the rune length of each chunk sent for
+	// embedding. Default 8192.
+	MaxInputChars int `toml:"max_input_chars" json:"max_input_chars"`
+	// QueryPrefix is prepended verbatim to search queries before embedding.
+	// It allows instruction-tuned models to distinguish queries from indexed
+	// documents. Changing it cuts a new vector generation. Default empty.
+	QueryPrefix string `toml:"query_prefix" json:"query_prefix,omitempty"`
+	// DocumentPrefix is prepended verbatim to every document chunk before
+	// embedding. Changing it cuts a new vector generation. Default empty.
+	DocumentPrefix string `toml:"document_prefix" json:"document_prefix,omitempty"`
+	// InputSuffix is appended verbatim to every text sent for embedding
+	// (documents and queries alike). Some models expect a terminator the
+	// serving layer does not add — e.g. Qwen3-Embedding under llama.cpp
+	// wants "<|endoftext|>" appended client-side. Changing it cuts a new
+	// vector generation. Default empty.
+	InputSuffix string `toml:"input_suffix" json:"input_suffix,omitempty"`
+	// DefaultServer names the server used for search-time query encoding
+	// and for builds that don't select one (scheduled builds, and
+	// `embeddings build` without --using). Optional when exactly one
+	// server is defined.
+	DefaultServer string `toml:"default_server" json:"default_server,omitempty"`
+	// Servers is the set of named OpenAI-compatible endpoints that serve
+	// Model, keyed by the name `embeddings build --using <name>` selects.
+	Servers map[string]VectorEmbeddingsServerConfig `toml:"servers" json:"servers"`
+}
+
+// VectorEmbeddingsServerConfig is one named embeddings server: transport
+// and capacity settings only; the model identity lives on
+// VectorEmbeddingsConfig.
+type VectorEmbeddingsServerConfig struct {
+	Endpoint string `toml:"endpoint" json:"endpoint"`
+	// OllamaCPUFallback retries invalid Metal vectors once through Ollama's
+	// native CPU embedding path. It is transport-only and defaults to false.
+	OllamaCPUFallback bool `toml:"ollama_cpu_fallback" json:"ollama_cpu_fallback,omitempty"`
+	// APIKeyEnv names the environment variable holding the API key.
+	// Empty means anonymous access.
+	APIKeyEnv string `toml:"api_key_env" json:"api_key_env,omitempty"`
+	// BatchSize is the number of inputs sent per HTTP call. Default 32.
+	BatchSize int `toml:"batch_size" json:"batch_size"`
+	// Concurrency is the number of documents embedded in parallel during a
+	// build against this server. Sequential requests leave a build
+	// round-trip-bound against remote endpoints, so the default is 4;
+	// servers that process one request at a time simply queue the extras.
+	Concurrency int `toml:"concurrency" json:"concurrency"`
+	// Timeout is a parseable duration string applied to each HTTP
+	// call. Default "30s".
+	Timeout string `toml:"timeout" json:"timeout"`
+	// MaxRetries is the maximum total attempts on 429/5xx/network errors
+	// (4xx fails fast); 0 means one attempt. Default 3.
+	MaxRetries int `toml:"max_retries" json:"max_retries"`
+}
+
+// ResolvedDefaultServer returns the server name used when no explicit
+// choice is made: default_server when set, otherwise the only defined
+// server, otherwise "".
+func (c VectorEmbeddingsConfig) ResolvedDefaultServer() string {
+	if c.DefaultServer != "" {
+		return c.DefaultServer
+	}
+	if len(c.Servers) == 1 {
+		for name := range c.Servers {
+			return name
+		}
+	}
+	return ""
+}
+
+// Server resolves name to a defined embeddings server; "" means the
+// default. The resolved name is returned alongside the server so callers
+// can report which server a build actually used.
+func (c VectorEmbeddingsConfig) Server(name string) (string, VectorEmbeddingsServerConfig, error) {
+	if name == "" {
+		name = c.ResolvedDefaultServer()
+	}
+	s, ok := c.Servers[name]
+	if !ok {
+		return "", VectorEmbeddingsServerConfig{}, fmt.Errorf(
+			"[vector.embeddings] no server named %q; define it under [vector.embeddings.servers.%s] (have: %s)",
+			name, name, strings.Join(sortedServerNames(c.Servers), ", "))
+	}
+	return name, s, nil
+}
+
+// normalizedEmbeddingsServers fills each named server's unset transport
+// fields with their defaults (batch_size 32, concurrency 4, timeout "30s",
+// max_retries 3). meta.IsDefined distinguishes "unset" (apply the default)
+// from an explicit zero — an explicit max_retries = 0 disables retries, and
+// an explicit zero batch_size/concurrency stays zero so validation rejects
+// it instead of silently substituting the default.
+func normalizedEmbeddingsServers(
+	servers map[string]VectorEmbeddingsServerConfig, meta toml.MetaData,
+) map[string]VectorEmbeddingsServerConfig {
+	out := make(map[string]VectorEmbeddingsServerConfig, len(servers))
+	for name, s := range servers {
+		if !meta.IsDefined("vector", "embeddings", "servers", name, "batch_size") {
+			s.BatchSize = 32
+		}
+		if !meta.IsDefined("vector", "embeddings", "servers", name, "concurrency") {
+			s.Concurrency = 4
+		}
+		if s.Timeout == "" {
+			s.Timeout = "30s"
+		}
+		if !meta.IsDefined("vector", "embeddings", "servers", name, "max_retries") {
+			s.MaxRetries = 3
+		}
+		out[name] = s
+	}
+	return out
+}
+
+// sortedServerNames returns the configured server names in sorted order,
+// for deterministic error messages and validation.
+func sortedServerNames(servers map[string]VectorEmbeddingsServerConfig) []string {
+	names := make([]string, 0, len(servers))
+	for name := range servers {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// VectorEmbedConfig configures when the daemon runs embedding work.
+type VectorEmbedConfig struct {
+	// RunAfterSync enables debounced embedding of sync deltas.
+	// Defaults to true when unset; read it via RunAfterSyncEnabled.
+	RunAfterSync *bool `toml:"run_after_sync" json:"run_after_sync,omitempty"`
+	// Recall explicitly permits automatic Recall embedding. It defaults to
+	// false because Recall entries may contain distilled private content.
+	Recall bool `toml:"recall" json:"recall"`
+	// BackstopInterval is a parseable duration string for a periodic
+	// full rescan. Default "24h"; a negative duration disables it.
+	BackstopInterval string `toml:"backstop_interval" json:"backstop_interval"`
+}
+
+// Validate checks the vector config for internal consistency. It is a
+// no-op when the section is disabled.
+func (c VectorConfig) Validate() error {
+	if !c.Enabled {
+		return nil
+	}
+	if c.Embeddings.Model == "" {
+		return fmt.Errorf("[vector.embeddings] model is required when [vector] is enabled")
+	}
+	if c.Embeddings.Dimension <= 0 {
+		return fmt.Errorf("[vector.embeddings] dimension must be greater than 0 when [vector] is enabled")
+	}
+	if c.Embeddings.MaxInputChars <= 0 {
+		return fmt.Errorf(
+			"[vector.embeddings] max_input_chars must be greater than 0, got %d",
+			c.Embeddings.MaxInputChars)
+	}
+	if err := c.Embeddings.validateServers(); err != nil {
+		return err
+	}
+	backstop, err := time.ParseDuration(c.Embed.BackstopInterval)
+	if err != nil {
+		return fmt.Errorf("[vector.embed] invalid backstop_interval %q: %w", c.Embed.BackstopInterval, err)
+	}
+	if backstop == 0 {
+		return fmt.Errorf(
+			"[vector.embed] backstop_interval must not be zero; " +
+				"use a negative value to disable or omit for the 24h default")
+	}
+	return nil
+}
+
+// ResolvedDBPath returns DBPath if set, else <dataDir>/vectors.db.
+func (c VectorConfig) ResolvedDBPath(dataDir string) string {
+	if c.DBPath != "" {
+		return c.DBPath
+	}
+	return filepath.Join(dataDir, "vectors.db")
+}
+
+// APIKey reads the API key from the environment variable named by
+// APIKeyEnv. Returns "" when APIKeyEnv is unset.
+func (c VectorEmbeddingsServerConfig) APIKey() string {
+	if c.APIKeyEnv == "" {
+		return ""
+	}
+	return os.Getenv(c.APIKeyEnv)
+}
+
+// validateServers checks the named-servers section: at least one server, an
+// unambiguous default, and per-server transport settings that parse.
+func (c VectorEmbeddingsConfig) validateServers() error {
+	if len(c.Servers) == 0 {
+		return fmt.Errorf(
+			"[vector.embeddings] at least one server is required when [vector] is enabled; " +
+				"define one under [vector.embeddings.servers.<name>]")
+	}
+	if c.DefaultServer == "" && len(c.Servers) > 1 {
+		return fmt.Errorf(
+			"[vector.embeddings] default_server is required when more than one server is defined (have: %s)",
+			strings.Join(sortedServerNames(c.Servers), ", "))
+	}
+	if c.DefaultServer != "" {
+		if _, ok := c.Servers[c.DefaultServer]; !ok {
+			return fmt.Errorf(
+				"[vector.embeddings] default_server %q is not a defined server (have: %s)",
+				c.DefaultServer, strings.Join(sortedServerNames(c.Servers), ", "))
+		}
+	}
+	for _, name := range sortedServerNames(c.Servers) {
+		if err := c.Servers[name].validate(name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validate checks one named server's transport settings.
+func (c VectorEmbeddingsServerConfig) validate(name string) error {
+	section := fmt.Sprintf("[vector.embeddings.servers.%s]", name)
+	if c.Endpoint == "" {
+		return fmt.Errorf("%s endpoint is required", section)
+	}
+	if c.OllamaCPUFallback {
+		u, err := url.Parse(c.Endpoint)
+		if err != nil || u.Scheme == "" || u.Host == "" ||
+			(u.Scheme != "http" && u.Scheme != "https") {
+			return fmt.Errorf(
+				"%s ollama_cpu_fallback requires an absolute HTTP(S) endpoint", section)
+		}
+		endpointPath := strings.TrimSuffix(u.Path, "/")
+		if !strings.HasSuffix(endpointPath, "/v1") {
+			return fmt.Errorf(
+				"%s ollama_cpu_fallback requires an endpoint ending in /v1", section)
+		}
+	}
+	if c.BatchSize <= 0 {
+		return fmt.Errorf("%s batch_size must be greater than 0, got %d", section, c.BatchSize)
+	}
+	if c.Concurrency <= 0 {
+		return fmt.Errorf("%s concurrency must be greater than 0, got %d", section, c.Concurrency)
+	}
+	if c.MaxRetries < 0 {
+		return fmt.Errorf("%s max_retries must be >= 0, got %d", section, c.MaxRetries)
+	}
+	timeout, err := time.ParseDuration(c.Timeout)
+	if err != nil {
+		return fmt.Errorf("%s invalid timeout %q: %w", section, c.Timeout, err)
+	}
+	if timeout <= 0 {
+		return fmt.Errorf("%s timeout must be greater than 0, got %q", section, c.Timeout)
+	}
+	return nil
+}
+
+// RunAfterSyncEnabled reports whether embedding should run after sync,
+// defaulting to true when RunAfterSync is unset.
+func (c VectorEmbedConfig) RunAfterSyncEnabled() bool {
+	if c.RunAfterSync == nil {
+		return true
+	}
+	return *c.RunAfterSync
+}
+
+// AutomatedConfig holds user-supplied additions to the
+// automated-session classifier. Parse-only; all semantic
+// normalization (trim, dedupe, length cap, built-in overlap
+// drop) happens inside the db setters.
+type AutomatedConfig struct {
+	Prefixes     []string `toml:"prefixes" json:"prefixes,omitempty"`
+	Substrings   []string `toml:"substrings" json:"substrings,omitempty"`
+	ExactMatches []string `toml:"exact_matches" json:"exact_matches,omitempty"`
+}
+
+// AgentConfig holds per-agent runtime overrides.
+type AgentConfig struct {
+	Binary      string `json:"binary,omitempty" toml:"binary"`
+	Sandbox     string `json:"sandbox,omitempty" toml:"sandbox"`
+	AllowUnsafe bool   `json:"allow_unsafe,omitempty" toml:"allow_unsafe"`
+}
+
+// InsightsConfig controls an optional OpenAI-compatible chat-completions
+// endpoint for generated insights.
+type InsightsConfig struct {
+	Endpoint  string `json:"endpoint,omitempty" toml:"endpoint"`
+	Model     string `json:"model,omitempty" toml:"model"`
+	APIKeyEnv string `json:"api_key_env,omitempty" toml:"api_key_env"`
+	AllowHTTP bool   `json:"allow_http,omitempty" toml:"allow_http"`
+}
+
+// APIKey reads the configured key from the environment. The key itself is
+// intentionally never part of the serialized configuration.
+func (c InsightsConfig) APIKey() string {
+	if strings.TrimSpace(c.APIKeyEnv) == "" {
+		return ""
+	}
+	return os.Getenv(strings.TrimSpace(c.APIKeyEnv))
+}
+
+// Validate checks endpoint intent and transport safety.
+func (c InsightsConfig) Validate() error {
+	endpoint := strings.TrimSpace(c.Endpoint)
+	model := strings.TrimSpace(c.Model)
+	configured := endpoint != "" || model != "" ||
+		strings.TrimSpace(c.APIKeyEnv) != "" || c.AllowHTTP
+	if !configured {
+		return nil
+	}
+	if endpoint == "" || model == "" {
+		return fmt.Errorf("[insights] endpoint and model are required together")
+	}
+	u, err := url.Parse(endpoint)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return fmt.Errorf("[insights] endpoint %q must be an http(s) URL", RedactedEndpoint(endpoint))
+	}
+	if u.User != nil {
+		return fmt.Errorf("[insights] endpoint must not contain URL credentials: %q", RedactedEndpoint(endpoint))
+	}
+	if err := ValidateExtractTransport(u, c.AllowHTTP); err != nil {
+		return fmt.Errorf("[insights] %w", err)
+	}
+	return nil
+}
+
+type CustomModelRate struct {
+	InputMicrodollarsPerMTok         int64 `json:"input_microdollars_per_mtok" toml:"input_microdollars_per_mtok"`
+	OutputMicrodollarsPerMTok        int64 `json:"output_microdollars_per_mtok" toml:"output_microdollars_per_mtok"`
+	CacheCreationMicrodollarsPerMTok int64 `json:"cache_creation_microdollars_per_mtok,omitempty" toml:"cache_creation_microdollars_per_mtok"`
+	CacheReadMicrodollarsPerMTok     int64 `json:"cache_read_microdollars_per_mtok,omitempty" toml:"cache_read_microdollars_per_mtok"`
+}
+
+type RemoteTransport string
+
+const (
+	// RemoteTransportSSH is retained for compatibility but deprecated. New
+	// remote sync configurations should use RemoteTransportHTTP.
+	RemoteTransportSSH  RemoteTransport = "ssh"
+	RemoteTransportHTTP RemoteTransport = "http"
+)
+
+type ChartPalette string
+
+const (
+	ChartPaletteAgentsview ChartPalette = "agentsview"
+	ChartPaletteMatplotlib ChartPalette = "matplotlib"
+	DefaultChartPalette                 = ChartPaletteAgentsview
+)
+
+func ParseChartPalette(value string) (ChartPalette, error) {
+	palette := ChartPalette(value)
+	switch palette {
+	case ChartPaletteAgentsview, ChartPaletteMatplotlib:
+		return palette, nil
+	default:
+		return "", fmt.Errorf(
+			`chart_palette must be "agentsview" or "matplotlib" (got %q)`,
+			value,
+		)
+	}
+}
+
+// RemoteHost describes one target for config-driven `agentsview sync`
+// fan-out. Host is required. Deprecated SSH remotes may set User and Port
+// (Port 0 means the ssh default of 22). HTTP remotes must set URL
+// and Token. A zero/empty Interval disables periodic remote
+// sync for this host.
+type RemoteHost struct {
+	Host      string          `toml:"host" json:"host"`
+	Transport RemoteTransport `toml:"transport,omitempty" json:"transport,omitempty"`
+	User      string          `toml:"user,omitempty" json:"user,omitempty"`
+	Port      int             `toml:"port,omitempty" json:"port,omitempty"`
+	URL       string          `toml:"url,omitempty" json:"url,omitempty"`
+	Token     string          `toml:"token,omitempty" json:"-"`
+	Interval  time.Duration   `toml:"interval,omitempty" json:"interval,omitempty"`
+}
+
+// SessionSource adds one agent session root with optional machine attribution.
+// Legacy per-agent directory settings are resolved into the same root set.
+type SessionSource struct {
+	Agent   parser.AgentType `toml:"agent" json:"agent"`
+	Dir     string           `toml:"dir" json:"dir"`
+	Machine string           `toml:"machine,omitempty" json:"machine,omitempty"`
+}
+
+type sessionSourceConfig struct {
+	Agent   string  `toml:"agent"`
+	Dir     string  `toml:"dir"`
+	Machine *string `toml:"machine"`
+}
+
+// Config holds all application configuration.
+type Config struct {
+	Host                 string                 `json:"host" toml:"host"`
+	Port                 int                    `json:"port" toml:"port"`
+	ChartPalette         ChartPalette           `json:"chart_palette" toml:"chart_palette"`
+	DataDir              string                 `json:"data_dir" toml:"data_dir"`
+	DBPath               string                 `json:"-" toml:"-"`
+	PublicURL            string                 `json:"public_url,omitempty" toml:"public_url"`
+	PublicOrigins        []string               `json:"public_origins,omitempty" toml:"public_origins"`
+	Proxy                ProxyConfig            `json:"proxy,omitempty" toml:"proxy"`
+	WatchExcludePatterns []string               `json:"watch_exclude_patterns,omitempty" toml:"watch_exclude_patterns"`
+	DisabledAgents       []parser.AgentType     `json:"disabled_agents,omitempty" toml:"disabled_agents"`
+	CursorSecret         string                 `json:"cursor_secret" toml:"cursor_secret"`
+	CursorAdminAPIKey    string                 `json:"cursor_admin_api_key,omitempty" toml:"cursor_admin_api_key"`
+	CursorAdminEmail     string                 `json:"cursor_admin_email,omitempty" toml:"cursor_admin_email"`
+	CursorAdminUserID    string                 `json:"cursor_admin_user_id,omitempty" toml:"cursor_admin_user_id"`
+	GithubToken          string                 `json:"github_token,omitempty" toml:"github_token"`
+	Terminal             TerminalConfig         `json:"terminal,omitempty" toml:"terminal"`
+	AuthToken            string                 `json:"auth_token,omitempty" toml:"auth_token"`
+	RequireAuth          bool                   `json:"require_auth" toml:"require_auth"`
+	NoBrowser            bool                   `json:"no_browser" toml:"no_browser"`
+	DisableUpdateCheck   bool                   `json:"disable_update_check" toml:"disable_update_check"`
+	NoSync               bool                   `json:"-" toml:"-"`
+	SkipInitialSync      bool                   `json:"-" toml:"-"`
+	PG                   PGConfig               `json:"pg,omitempty" toml:"pg"`
+	DefaultPG            string                 `json:"default_pg,omitempty" toml:"default_pg"`
+	PGTargets            map[string]PGConfig    `json:"-" toml:"-"`
+	DuckDB               DuckDBConfig           `json:"duckdb,omitempty" toml:"duckdb"`
+	Vector               VectorConfig           `json:"vector,omitempty" toml:"vector"`
+	Recall               RecallConfig           `json:"recall,omitempty" toml:"recall"`
+	Insights             InsightsConfig         `json:"insights,omitempty" toml:"insights"`
+	Automated            AutomatedConfig        `json:"automated,omitempty" toml:"automated"`
+	Agent                map[string]AgentConfig `json:"agent,omitempty" toml:"agent"`
+	WriteTimeout         time.Duration          `json:"-" toml:"-"`
+	// LocalMachineName is the operating-system hostname used to identify
+	// sessions ingested from this machine. It is runtime-derived rather than
+	// persisted configuration so local and remote source labels share the same
+	// hostname namespace.
+	LocalMachineName string `json:"-" toml:"-"`
+
+	// AgentDirs maps each AgentType to its configured
+	// directories. Single-dir agents store a one-element
+	// slice; unconfigured agents use nil.
+	AgentDirs map[parser.AgentType][]string `json:"-" toml:"-"`
+
+	// SessionSources contains resolved structured sources. SourceMachines maps
+	// each effective configured root to its machine label for sync.
+	SessionSources       []SessionSource                        `json:"-" toml:"-"`
+	SourceMachines       map[parser.AgentType]map[string]string `json:"-" toml:"-"`
+	sessionSourceConfigs []sessionSourceConfig
+
+	// agentDirSource tracks how each agent's dirs were
+	// set so loadFile doesn't override env-set values.
+	agentDirSource map[parser.AgentType]dirSource
+
+	ResultContentBlockedCategories []string `json:"result_content_blocked_categories,omitempty" toml:"result_content_blocked_categories"`
+
+	// SyncIncludeCwdPrefixes, when non-empty, restricts local session
+	// ingestion to sessions whose working directory equals one of the
+	// prefixes or lives underneath one. Sessions without a recorded
+	// cwd are skipped while the filter is active. Config-file only;
+	// remote sync is unaffected because the prefixes describe local
+	// paths.
+	SyncIncludeCwdPrefixes []string `json:"-" toml:"sync_include_cwd_prefixes"`
+
+	// ScanProtectedPaths allows local Git discovery to read working
+	// directories inside macOS locations guarded by a TCC consent prompt
+	// (Documents, Downloads, Desktop, iCloud Drive, and cloud-provider
+	// folders such as Dropbox). It defaults to false so a first sync never
+	// asks for access to folders the user did not point us at; sessions
+	// there keep path-only project identity instead of Git remote,
+	// worktree, and branch detail. Setting it accepts one macOS prompt per
+	// location in exchange for that detail. No effect off macOS.
+	ScanProtectedPaths bool `json:"-" toml:"scan_protected_paths"`
+
+	// EventsCoalesceInterval is the minimum wall-clock time between
+	// SSE data_changed broadcasts to connected clients. Emits that
+	// arrive within this window after a prior broadcast are coalesced
+	// into a single trailing broadcast, bounding dashboard refetch
+	// work during bursts of sync activity. Zero disables coalescing.
+	EventsCoalesceInterval time.Duration `json:"events_coalesce_interval,omitempty" toml:"events_coalesce_interval"`
+
+	DaemonIdleTimeout time.Duration `json:"daemon_idle_timeout,omitempty" toml:"daemon_idle_timeout"`
+
+	CustomModelPricing map[string]CustomModelRate `json:"custom_model_pricing,omitempty" toml:"custom_model_pricing"`
+
+	// RemoteHosts is the config-file list of remote targets that
+	// `agentsview sync` (with no --host) syncs after the local
+	// pass. CLI/config-file only; never serialized to the
+	// settings API, so there is no web-UI editing of this list.
+	RemoteHosts []RemoteHost `json:"-" toml:"-"`
+
+	// HostExplicit is true when the user passed --host on the CLI.
+	// Used to prevent auto-bind to 0.0.0.0 when the user
+	// explicitly requested a specific host.
+	HostExplicit bool `json:"-" toml:"-"`
+
+	pgEnvOverrides pgEnvOverrides
+}
+
+func (c Config) ResolvedChartPalette() ChartPalette {
+	if c.ChartPalette == "" {
+		return DefaultChartPalette
+	}
+	return c.ChartPalette
+}
+
+type dirSource int
+
+const (
+	dirDefault dirSource = iota
+	dirFile
+	dirEnv
+)
+
+// ResolveDirs returns the effective directories for an agent.
+func (c Config) AgentDisabled(agent parser.AgentType) bool {
+	return slices.Contains(c.DisabledAgents, agent)
+}
+
+func (c Config) ConfiguredDirs(agent parser.AgentType) []string {
+	return append([]string(nil), c.AgentDirs[agent]...)
+}
+
+func (c Config) ResolveDirs(agent parser.AgentType) []string {
+	return c.ConfiguredDirs(agent)
+}
+
+// LocalProviderFactories returns the provider set used for local filesystem
+// ingestion. Remote import and export deliberately use the full registry.
+func (c Config) LocalProviderFactories() []parser.ProviderFactory {
+	factories := parser.ProviderFactories()
+	return slices.DeleteFunc(factories, func(factory parser.ProviderFactory) bool {
+		return c.AgentDisabled(factory.Definition().Type)
+	})
+}
+
+func NormalizeDisabledAgents(
+	values []string,
+) ([]parser.AgentType, error) {
+	requested := make(map[parser.AgentType]struct{}, len(values))
+	for _, value := range values {
+		agent := parser.AgentType(strings.ToLower(strings.TrimSpace(value)))
+		found := false
+		for _, def := range parser.Registry {
+			if def.Type != agent {
+				continue
+			}
+			found = true
+			if !def.FileBased && def.EnvVar == "" {
+				return nil, fmt.Errorf(
+					`disabled_agents: %q is not a configurable session provider`,
+					agent,
+				)
+			}
+			requested[agent] = struct{}{}
+			break
+		}
+		if !found {
+			return nil, fmt.Errorf(
+				`disabled_agents: unknown session provider %q`, agent,
+			)
+		}
+	}
+	normalized := make([]parser.AgentType, 0, len(requested))
+	for _, def := range parser.Registry {
+		if _, ok := requested[def.Type]; ok {
+			normalized = append(normalized, def.Type)
+		}
+	}
+	return normalized, nil
+}
+
+// IsUserConfigured reports whether the agent's directories
+// were explicitly set by the user (via env var or config file)
+// rather than populated from defaults.
+func (c *Config) IsUserConfigured(
+	agent parser.AgentType,
+) bool {
+	return c.agentDirSource[agent] != dirDefault
+}
+
+// ValidateRemoteHosts checks the configured remote_hosts entries
+// for semantic errors. It checks the trimmed values that loadFile
+// already normalized, so what is validated here is exactly what is
+// passed to remote sync. Returns an aggregated error naming every
+// offending entry, or nil when all entries are valid.
+func (c Config) ValidateRemoteHosts() error {
+	var problems []string
+	seen := make(map[string]int, len(c.RemoteHosts))
+	for i, h := range c.RemoteHosts {
+		transport := h.Transport
+		if transport == "" {
+			transport = RemoteTransportSSH
+		}
+		if h.Host == "" {
+			problems = append(problems,
+				fmt.Sprintf("entry %d: host is required", i+1))
+		}
+		if trimmed := strings.TrimSpace(h.Host); isSSHOptionShaped(h.Host) {
+			problems = append(problems,
+				fmt.Sprintf("entry %d: host must not begin with '-' (got %q)",
+					i+1, trimmed))
+		}
+		if trimmed := strings.TrimSpace(h.User); isSSHOptionShaped(h.User) {
+			problems = append(problems,
+				fmt.Sprintf("entry %d (%q): user must not begin with '-' (got %q)",
+					i+1, h.Host, trimmed))
+		}
+		if h.Port < 0 || h.Port > 65535 {
+			problems = append(problems,
+				fmt.Sprintf("entry %d (%q): invalid port %d",
+					i+1, h.Host, h.Port))
+		}
+		if h.Interval < 0 {
+			problems = append(problems,
+				fmt.Sprintf("entry %d (%q): invalid interval %s",
+					i+1, h.Host, h.Interval))
+		}
+		switch transport {
+		case RemoteTransportSSH:
+			if h.URL != "" {
+				problems = append(problems,
+					fmt.Sprintf("entry %d (%q): url is only valid for http",
+						i+1, h.Host))
+			}
+			if h.Token != "" {
+				problems = append(problems,
+					fmt.Sprintf("entry %d (%q): token is only valid for http",
+						i+1, h.Host))
+			}
+		case RemoteTransportHTTP:
+			if h.User != "" {
+				problems = append(problems,
+					fmt.Sprintf("entry %d (%q): user is only valid for ssh",
+						i+1, h.Host))
+			}
+			if h.Port != 0 {
+				problems = append(problems,
+					fmt.Sprintf("entry %d (%q): port is only valid for ssh",
+						i+1, h.Host))
+			}
+			if err := validateRemoteHTTPURL(h.URL); err != nil {
+				problems = append(problems,
+					fmt.Sprintf("entry %d (%q): %v",
+						i+1, h.Host, err))
+			}
+			if h.Token == "" {
+				problems = append(problems,
+					fmt.Sprintf("entry %d (%q): token is required for http",
+						i+1, h.Host))
+			}
+		default:
+			problems = append(problems,
+				fmt.Sprintf("entry %d (%q): invalid transport %q",
+					i+1, h.Host, h.Transport))
+		}
+		// Remote sync namespaces sessions and the skip cache by
+		// host alone (see ssh.RemoteSync), so two entries sharing a
+		// host collide regardless of user/port. Reject duplicates
+		// rather than silently share or overwrite cached state.
+		if h.Host != "" {
+			if first, ok := seen[h.Host]; ok {
+				problems = append(problems,
+					fmt.Sprintf("entry %d: duplicate host %q (already at entry %d)",
+						i+1, h.Host, first))
+			} else {
+				seen[h.Host] = i + 1
+			}
+		}
+	}
+	if len(problems) > 0 {
+		return fmt.Errorf("remote_hosts: %s",
+			strings.Join(problems, "; "))
+	}
+	return nil
+}
+
+func validateRemoteHTTPURL(raw string) error {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return fmt.Errorf("url is required")
+	}
+	u, err := url.Parse(value)
+	if err != nil {
+		return fmt.Errorf("invalid url: %w", err)
+	}
+	scheme := strings.ToLower(u.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return fmt.Errorf("url must use http or https")
+	}
+	if u.Hostname() == "" {
+		return fmt.Errorf("url must include a host")
+	}
+	if u.User != nil {
+		return fmt.Errorf("url must not include userinfo")
+	}
+	if u.RawQuery != "" || u.ForceQuery {
+		return fmt.Errorf("url must not include query")
+	}
+	if u.Fragment != "" || u.RawFragment != "" || strings.Contains(value, "#") {
+		return fmt.Errorf("url must not include fragment")
+	}
+	return nil
+}
+
+func isSSHOptionShaped(value string) bool {
+	return strings.HasPrefix(strings.TrimSpace(value), "-")
+}
+
+// Default returns a Config with default values.
+func Default() (Config, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return Config{}, fmt.Errorf(
+			"determining home directory: %w", err,
+		)
+	}
+	dataDir := filepath.Join(home, ".agentsview")
+	hostname, err := os.Hostname()
+	if err != nil {
+		return Config{}, fmt.Errorf("identify local sync machine: %w", err)
+	}
+	if strings.TrimSpace(hostname) == "" {
+		return Config{}, fmt.Errorf("identify local sync machine: hostname is empty")
+	}
+
+	agentDirs := make(map[parser.AgentType][]string)
+	agentDirSource := make(map[parser.AgentType]dirSource)
+	for _, def := range parser.Registry {
+		dirs := make([]string, len(def.DefaultDirs))
+		root := ""
+		if def.DefaultRootEnvVar != "" {
+			root = os.Getenv(def.DefaultRootEnvVar)
+		}
+		for i, rel := range def.DefaultDirs {
+			if root != "" {
+				dirs[i] = reRootDefaultDir(root, rel)
+				continue
+			}
+			dirs[i] = filepath.Join(home, rel)
+		}
+		// Keep the Hermes profiles container as a stable provider root. The
+		// provider enumerates its children on every discovery pass, so profiles
+		// created after startup become visible without rebuilding Config or the
+		// sync engine. Env/config overrides still replace all default roots.
+		if def.Type == parser.AgentHermes && root == "" {
+			dirs = append(dirs,
+				filepath.Join(home, ".hermes", "profiles"),
+			)
+		}
+		agentDirs[def.Type] = dirs
+		agentDirSource[def.Type] = dirDefault
+	}
+
+	return Config{
+		Host:                           "127.0.0.1",
+		Port:                           8080,
+		ChartPalette:                   DefaultChartPalette,
+		DataDir:                        dataDir,
+		DBPath:                         filepath.Join(dataDir, "sessions.db"),
+		WriteTimeout:                   30 * time.Second,
+		LocalMachineName:               hostname,
+		AgentDirs:                      agentDirs,
+		agentDirSource:                 agentDirSource,
+		SourceMachines:                 make(map[parser.AgentType]map[string]string),
+		WatchExcludePatterns:           []string{".git", "node_modules", "__pycache__", ".venv", "venv", "vendor", ".next"},
+		ResultContentBlockedCategories: []string{"Read", "Glob"},
+		EventsCoalesceInterval:         10 * time.Second,
+		DaemonIdleTimeout:              20 * time.Minute,
+		Agent:                          map[string]AgentConfig{},
+		Vector: VectorConfig{
+			Embeddings: VectorEmbeddingsConfig{
+				MaxInputChars: 8192,
+			},
+			Embed: VectorEmbedConfig{
+				BackstopInterval: "24h",
+			},
+		},
+		Recall: RecallConfig{
+			Extract: RecallExtractConfig{
+				MaxWindowChars:   50000,
+				QuietPeriod:      "30m",
+				BackstopInterval: "1h",
+				FailureBackoff:   "1h",
+			},
+		},
+	}, nil
+}
+
+func reRootDefaultDir(root, rel string) string {
+	rel = filepath.Clean(rel)
+	if _, tail, ok := strings.Cut(rel, string(filepath.Separator)); ok && tail != "" {
+		return filepath.Join(root, tail)
+	}
+	return root
+}
+
+// Load builds a Config by layering: defaults < config file < env < flags.
+// The provided FlagSet must already be parsed by the caller.
+// Only flags that were explicitly set override the lower layers.
+func Load(fs *flag.FlagSet) (Config, error) {
+	cfg, err := LoadMinimal()
+	if err != nil {
+		return cfg, err
+	}
+	applyFlags(&cfg, fs)
+	if err := finalize(&cfg); err != nil {
+		return cfg, err
+	}
+	return cfg, nil
+}
+
+// LoadPFlags builds a Config from a parsed Cobra/pflag FlagSet.
+func LoadPFlags(fs *pflag.FlagSet) (Config, error) {
+	cfg, err := LoadMinimal()
+	if err != nil {
+		return cfg, err
+	}
+	applyPFlags(&cfg, fs)
+	if err := finalize(&cfg); err != nil {
+		return cfg, err
+	}
+	return cfg, nil
+}
+
+// LoadPGServePFlags builds a PG serve config from a parsed Cobra/pflag FlagSet.
+func LoadPGServePFlags(fs *pflag.FlagSet) (Config, error) {
+	cfg, err := loadPGServeBase()
+	if err != nil {
+		return cfg, err
+	}
+	applyPFlags(&cfg, fs)
+	if err := finalize(&cfg); err != nil {
+		return cfg, err
+	}
+	return cfg, nil
+}
+
+// LoadDuckDBServePFlags builds a DuckDB serve config from a parsed Cobra/pflag
+// FlagSet. It intentionally uses the same isolated serve defaults as pg serve.
+func LoadDuckDBServePFlags(fs *pflag.FlagSet) (Config, error) {
+	cfg, err := loadPGServeBase()
+	if err != nil {
+		return cfg, err
+	}
+	applyPFlags(&cfg, fs)
+	if err := finalize(&cfg); err != nil {
+		return cfg, err
+	}
+	return cfg, nil
+}
+
+func loadPGServeBase() (Config, error) {
+	cfg, err := Default()
+	if err != nil {
+		return cfg, err
+	}
+	cfg.loadEnv()
+	if err := expandDataDir(&cfg); err != nil {
+		return cfg, err
+	}
+	if err := cfg.loadFile(); err != nil {
+		return cfg, fmt.Errorf("loading config file: %w", err)
+	}
+	if err := cfg.ensureCursorSecret(); err != nil {
+		return cfg, fmt.Errorf("ensuring cursor secret: %w", err)
+	}
+	cfg.DBPath = filepath.Join(cfg.DataDir, "sessions.db")
+
+	// pg serve intentionally ignores persisted normal serve/public/proxy
+	// settings so an existing SQLite-backed serve deployment cannot silently
+	// reconfigure the PG-backed server. Until a dedicated pg-serve config
+	// namespace exists, only explicit pg-serve flags should shape its
+	// network/proxy behavior.
+	cfg.Host = "127.0.0.1"
+	cfg.Port = 8080
+	cfg.PublicURL = ""
+	cfg.PublicOrigins = nil
+	cfg.Proxy = ProxyConfig{}
+	cfg.NoBrowser = false
+	cfg.HostExplicit = false
+	return cfg, nil
+}
+
+// LoadMinimal builds a Config from defaults, env, and config file,
+// without parsing CLI flags. Use this for subcommands that manage
+// their own flag sets.
+func LoadMinimal() (Config, error) {
+	cfg, err := Default()
+	if err != nil {
+		return cfg, err
+	}
+	cfg.loadEnv()
+	if err := expandDataDir(&cfg); err != nil {
+		return cfg, err
+	}
+
+	if err := cfg.loadFile(); err != nil {
+		return cfg, fmt.Errorf("loading config file: %w", err)
+	}
+	if err := finalize(&cfg); err != nil {
+		return cfg, err
+	}
+	if err := cfg.ensureCursorSecret(); err != nil {
+		return cfg, fmt.Errorf("ensuring cursor secret: %w", err)
+	}
+	cfg.DBPath = filepath.Join(cfg.DataDir, "sessions.db")
+	return cfg, nil
+}
+
+// LoadReadOnly builds a Config from defaults, env, and config.toml without
+// writing config migrations or generated secrets. Use it for diagnostic
+// commands that must not mutate user state.
+func LoadReadOnly() (Config, error) {
+	cfg, err := Default()
+	if err != nil {
+		return cfg, err
+	}
+	cfg.loadEnv()
+	if err := expandDataDir(&cfg); err != nil {
+		return cfg, err
+	}
+
+	if err := cfg.loadFileReadOnly(); err != nil {
+		return cfg, fmt.Errorf("loading config file: %w", err)
+	}
+	if err := finalize(&cfg); err != nil {
+		return cfg, err
+	}
+	cfg.DBPath = filepath.Join(cfg.DataDir, "sessions.db")
+	return cfg, nil
+}
+
+func (c *Config) configPath() string {
+	return filepath.Join(c.DataDir, "config.toml")
+}
+
+func (c *Config) jsonConfigPath() string {
+	return filepath.Join(c.DataDir, "config.json")
+}
+
+// migrateJSONToTOML converts config.json to config.toml if
+// config.json exists and config.toml does not. The original
+// JSON file is renamed to config.json.bak.
+func (c *Config) migrateJSONToTOML() error {
+	return c.withConfigLock(func() error {
+		jsonPath := c.jsonConfigPath()
+		tomlPath := c.configPath()
+
+		if _, err := os.Stat(tomlPath); err == nil {
+			return nil // TOML already exists
+		}
+		data, err := os.ReadFile(jsonPath)
+		if os.IsNotExist(err) {
+			return nil // no JSON to migrate
+		}
+		if err != nil {
+			return fmt.Errorf("reading config.json for migration: %w", err)
+		}
+
+		var m map[string]any
+		if err := json.Unmarshal(data, &m); err != nil {
+			return fmt.Errorf("parsing config.json for migration: %w", err)
+		}
+
+		var buf bytes.Buffer
+		if err := toml.NewEncoder(&buf).Encode(m); err != nil {
+			return fmt.Errorf("encoding config.toml: %w", err)
+		}
+		if err := os.WriteFile(tomlPath, buf.Bytes(), 0o600); err != nil {
+			return fmt.Errorf("writing config.toml: %w", err)
+		}
+		if err := os.Rename(jsonPath, jsonPath+".bak"); err != nil {
+			return fmt.Errorf("renaming config.json to .bak: %w", err)
+		}
+		return nil
+	})
+}
+
+func (c *Config) loadFile() error {
+	return c.loadFileWithMigration(true)
+}
+
+func (c *Config) loadFileReadOnly() error {
+	return c.loadFileWithMigration(false)
+}
+
+func (c *Config) loadFileWithMigration(migrate bool) error {
+	if migrate {
+		if err := c.migrateJSONToTOML(); err != nil {
+			return err
+		}
+	}
+
+	path := c.configPath()
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		if migrate {
+			return nil
+		}
+		return c.loadLegacyJSONReadOnly()
+	} else if err != nil {
+		return fmt.Errorf("checking config: %w", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("reading config: %w", err)
+	}
+	return c.applyConfigTOML(string(data))
+}
+
+func (c *Config) loadLegacyJSONReadOnly() error {
+	data, err := os.ReadFile(c.jsonConfigPath())
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("reading config.json: %w", err)
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(data, &m); err != nil {
+		return fmt.Errorf("parsing config.json: %w", err)
+	}
+
+	var buf bytes.Buffer
+	if err := toml.NewEncoder(&buf).Encode(m); err != nil {
+		return fmt.Errorf("encoding config.json: %w", err)
+	}
+	return c.applyConfigTOML(buf.String())
+}
+
+func (c *Config) applyConfigTOML(data string) error {
+	var file struct {
+		GithubToken                    string                     `toml:"github_token"`
+		CursorSecret                   string                     `toml:"cursor_secret"`
+		CursorAdminAPIKey              string                     `toml:"cursor_admin_api_key"`
+		CursorAdminEmail               string                     `toml:"cursor_admin_email"`
+		CursorAdminUserID              string                     `toml:"cursor_admin_user_id"`
+		Host                           string                     `toml:"host"`
+		Port                           int                        `toml:"port"`
+		ChartPalette                   ChartPalette               `toml:"chart_palette"`
+		PublicURL                      string                     `toml:"public_url"`
+		PublicOrigins                  []string                   `toml:"public_origins"`
+		Proxy                          ProxyConfig                `toml:"proxy"`
+		WatchExcludePatterns           []string                   `toml:"watch_exclude_patterns"`
+		DisabledAgents                 []string                   `toml:"disabled_agents"`
+		SyncIncludeCwdPrefixes         []string                   `toml:"sync_include_cwd_prefixes"`
+		ScanProtectedPaths             bool                       `toml:"scan_protected_paths"`
+		ResultContentBlockedCategories []string                   `toml:"result_content_blocked_categories"`
+		Terminal                       TerminalConfig             `toml:"terminal"`
+		AuthToken                      string                     `toml:"auth_token"`
+		RequireAuth                    bool                       `toml:"require_auth"`
+		RemoteAccess                   bool                       `toml:"remote_access"`
+		DisableUpdateCheck             bool                       `toml:"disable_update_check"`
+		DefaultPG                      string                     `toml:"default_pg"`
+		PG                             PGConfig                   `toml:"pg"`
+		DuckDB                         DuckDBConfig               `toml:"duckdb"`
+		Vector                         VectorConfig               `toml:"vector"`
+		Recall                         RecallConfig               `toml:"recall"`
+		Insights                       InsightsConfig             `toml:"insights"`
+		Automated                      AutomatedConfig            `toml:"automated"`
+		Agent                          map[string]AgentConfig     `toml:"agent"`
+		EventsCoalesceInterval         time.Duration              `toml:"events_coalesce_interval"`
+		DaemonIdleTimeout              time.Duration              `toml:"daemon_idle_timeout"`
+		CustomModelPricing             map[string]CustomModelRate `toml:"custom_model_pricing"`
+		RemoteHosts                    []RemoteHost               `toml:"remote_hosts"`
+		SessionSources                 []sessionSourceConfig      `toml:"session_sources"`
+	}
+	meta, err := toml.Decode(data, &file)
+	if err != nil {
+		return fmt.Errorf("parsing config: %w", err)
+	}
+	for _, key := range meta.Undecoded() {
+		if len(key) != 3 || key[0] != "custom_model_pricing" {
+			continue
+		}
+		return fmt.Errorf(
+			"%s: unsupported pricing field; use input_microdollars_per_mtok, output_microdollars_per_mtok, cache_creation_microdollars_per_mtok, or cache_read_microdollars_per_mtok",
+			key.String(),
+		)
+	}
+	var raw map[string]any
+	if _, err := toml.Decode(data, &raw); err != nil {
+		return fmt.Errorf("parsing config raw: %w", err)
+	}
+	if file.GithubToken != "" {
+		c.GithubToken = file.GithubToken
+	}
+	if file.CursorSecret != "" {
+		c.CursorSecret = file.CursorSecret
+	}
+	if file.CursorAdminAPIKey != "" && c.CursorAdminAPIKey == "" {
+		c.CursorAdminAPIKey = file.CursorAdminAPIKey
+	}
+	if file.CursorAdminEmail != "" && c.CursorAdminEmail == "" {
+		c.CursorAdminEmail = file.CursorAdminEmail
+	}
+	if file.CursorAdminUserID != "" && c.CursorAdminUserID == "" {
+		c.CursorAdminUserID = file.CursorAdminUserID
+	}
+	if file.Host != "" {
+		c.Host = file.Host
+	}
+	if file.Port != 0 {
+		c.Port = file.Port
+	}
+	if meta.IsDefined("chart_palette") {
+		palette, err := ParseChartPalette(string(file.ChartPalette))
+		if err != nil {
+			return err
+		}
+		c.ChartPalette = palette
+	}
+	if file.PublicURL != "" {
+		c.PublicURL = file.PublicURL
+	}
+	if file.PublicOrigins != nil {
+		c.PublicOrigins = file.PublicOrigins
+	}
+	if file.Proxy.Mode != "" || file.Proxy.Bin != "" ||
+		file.Proxy.BindHost != "" || file.Proxy.PublicPort != 0 ||
+		file.Proxy.TLSCert != "" || file.Proxy.TLSKey != "" ||
+		file.Proxy.AllowedSubnets != nil {
+		c.Proxy = file.Proxy
+	}
+	if file.WatchExcludePatterns != nil {
+		c.WatchExcludePatterns = file.WatchExcludePatterns
+	}
+	if meta.IsDefined("disabled_agents") {
+		disabled, err := NormalizeDisabledAgents(file.DisabledAgents)
+		if err != nil {
+			return err
+		}
+		c.DisabledAgents = disabled
+	}
+	if file.SyncIncludeCwdPrefixes != nil {
+		c.SyncIncludeCwdPrefixes = file.SyncIncludeCwdPrefixes
+	}
+	if file.ScanProtectedPaths {
+		c.ScanProtectedPaths = true
+	}
+	if file.ResultContentBlockedCategories != nil {
+		c.ResultContentBlockedCategories = file.ResultContentBlockedCategories
+	}
+	if file.Terminal.Mode != "" {
+		c.Terminal = file.Terminal
+	}
+	if file.AuthToken != "" && c.AuthToken == "" {
+		c.AuthToken = file.AuthToken
+	}
+	c.RequireAuth = file.RequireAuth || file.RemoteAccess
+	c.DisableUpdateCheck = file.DisableUpdateCheck
+	if meta.IsDefined("default_pg") {
+		c.DefaultPG = normalizePGTargetName(file.DefaultPG)
+	}
+	legacyPG, namedPG, err := parsePGConfigSection(raw["pg"])
+	if err != nil {
+		return fmt.Errorf("pg: %w", err)
+	}
+	if len(namedPG) > 0 {
+		c.PG = PGConfig{}
+		c.PGTargets = namedPG
+	} else {
+		c.PGTargets = nil
+		if legacyPG.URL != "" {
+			c.PG.URL = legacyPG.URL
+		}
+		if legacyPG.Schema != "" {
+			c.PG.Schema = legacyPG.Schema
+		}
+		if legacyPG.MachineName != "" {
+			c.PG.MachineName = legacyPG.MachineName
+		}
+		if legacyPG.AllowInsecure {
+			c.PG.AllowInsecure = true
+		}
+		if legacyPG.Projects != nil {
+			c.PG.Projects = legacyPG.Projects
+		}
+		if legacyPG.ExcludeProjects != nil {
+			c.PG.ExcludeProjects = legacyPG.ExcludeProjects
+		}
+		if legacyPG.PushVectors != nil {
+			c.PG.PushVectors = legacyPG.PushVectors
+		}
+	}
+	// Merge duckdb field-by-field so env vars override only
+	// the fields they set, preserving config-file settings.
+	if file.DuckDB.Path != "" && c.DuckDB.Path == "" {
+		c.DuckDB.Path = file.DuckDB.Path
+	}
+	if file.DuckDB.URL != "" && c.DuckDB.URL == "" {
+		c.DuckDB.URL = file.DuckDB.URL
+	}
+	if file.DuckDB.Token != "" && c.DuckDB.Token == "" {
+		c.DuckDB.Token = file.DuckDB.Token
+	}
+	if file.DuckDB.MachineName != "" && c.DuckDB.MachineName == "" {
+		c.DuckDB.MachineName = file.DuckDB.MachineName
+	}
+	if file.DuckDB.AllowInsecure {
+		c.DuckDB.AllowInsecure = true
+	}
+	if file.DuckDB.AttachTimeout != 0 && c.DuckDB.AttachTimeout == 0 {
+		c.DuckDB.AttachTimeout = file.DuckDB.AttachTimeout
+	}
+	if file.DuckDB.Projects != nil && c.DuckDB.Projects == nil {
+		c.DuckDB.Projects = file.DuckDB.Projects
+	}
+	if file.DuckDB.ExcludeProjects != nil && c.DuckDB.ExcludeProjects == nil {
+		c.DuckDB.ExcludeProjects = file.DuckDB.ExcludeProjects
+	}
+	if file.Vector.Enabled {
+		c.Vector.Enabled = true
+	}
+	if file.Vector.DBPath != "" {
+		c.Vector.DBPath = file.Vector.DBPath
+	}
+	// IsDefined distinguishes "unset" (keep the default false) from an
+	// explicit include_automated = false, matching the other vector
+	// section fields' treatment even though both currently agree.
+	if meta.IsDefined("vector", "include_automated") {
+		c.Vector.IncludeAutomated = file.Vector.IncludeAutomated
+	}
+	if file.Vector.Embeddings.Model != "" {
+		c.Vector.Embeddings.Model = file.Vector.Embeddings.Model
+	}
+	if file.Vector.Embeddings.Dimension != 0 {
+		c.Vector.Embeddings.Dimension = file.Vector.Embeddings.Dimension
+	}
+	if file.Vector.Embeddings.RequestDimensions {
+		c.Vector.Embeddings.RequestDimensions = true
+	}
+	if meta.IsDefined("vector", "embeddings", "max_input_chars") {
+		c.Vector.Embeddings.MaxInputChars = file.Vector.Embeddings.MaxInputChars
+	}
+	if meta.IsDefined("vector", "embeddings", "query_prefix") {
+		c.Vector.Embeddings.QueryPrefix = file.Vector.Embeddings.QueryPrefix
+	}
+	if meta.IsDefined("vector", "embeddings", "document_prefix") {
+		c.Vector.Embeddings.DocumentPrefix = file.Vector.Embeddings.DocumentPrefix
+	}
+	if meta.IsDefined("vector", "embeddings", "input_suffix") {
+		c.Vector.Embeddings.InputSuffix = file.Vector.Embeddings.InputSuffix
+	}
+	if file.Vector.Embeddings.DefaultServer != "" {
+		c.Vector.Embeddings.DefaultServer = file.Vector.Embeddings.DefaultServer
+	}
+	if len(file.Vector.Embeddings.Servers) > 0 {
+		c.Vector.Embeddings.Servers = normalizedEmbeddingsServers(file.Vector.Embeddings.Servers, meta)
+	}
+	if file.Vector.Embed.RunAfterSync != nil {
+		c.Vector.Embed.RunAfterSync = file.Vector.Embed.RunAfterSync
+	}
+	if meta.IsDefined("vector", "embed", "recall") {
+		c.Vector.Embed.Recall = file.Vector.Embed.Recall
+	}
+	if file.Vector.Embed.BackstopInterval != "" {
+		c.Vector.Embed.BackstopInterval = file.Vector.Embed.BackstopInterval
+	}
+	c.mergeRecallExtractTOML(file.Recall, meta)
+	if meta.IsDefined("insights") {
+		c.Insights = file.Insights
+		c.Insights.Endpoint = strings.TrimSpace(c.Insights.Endpoint)
+		c.Insights.Model = strings.TrimSpace(c.Insights.Model)
+		c.Insights.APIKeyEnv = strings.TrimSpace(c.Insights.APIKeyEnv)
+	}
+	// IsDefined distinguishes "unset" (leave default 10s) from an
+	// explicit "0s" (disable coalescing). Checking != 0 would silently
+	// ignore the latter.
+	if meta.IsDefined("events_coalesce_interval") {
+		c.EventsCoalesceInterval = file.EventsCoalesceInterval
+	}
+	if meta.IsDefined("daemon_idle_timeout") {
+		c.DaemonIdleTimeout = file.DaemonIdleTimeout
+	}
+	if file.Automated.Prefixes != nil {
+		c.Automated.Prefixes = file.Automated.Prefixes
+	}
+	if file.Automated.Substrings != nil {
+		c.Automated.Substrings = file.Automated.Substrings
+	}
+	if file.Automated.ExactMatches != nil {
+		c.Automated.ExactMatches = file.Automated.ExactMatches
+	}
+	if len(file.Agent) > 0 {
+		if c.Agent == nil {
+			c.Agent = map[string]AgentConfig{}
+		}
+		for name, cfg := range file.Agent {
+			name = strings.TrimSpace(strings.ToLower(name))
+			if name == "" {
+				continue
+			}
+			cfg.Binary = strings.TrimSpace(cfg.Binary)
+			c.Agent[name] = cfg
+		}
+	}
+	if len(file.CustomModelPricing) > 0 {
+		for model, rate := range file.CustomModelPricing {
+			if rate.InputMicrodollarsPerMTok < 0 ||
+				rate.OutputMicrodollarsPerMTok < 0 ||
+				rate.CacheCreationMicrodollarsPerMTok < 0 ||
+				rate.CacheReadMicrodollarsPerMTok < 0 {
+				return fmt.Errorf("custom_model_pricing.%s: rates must not be negative", model)
+			}
+		}
+		c.CustomModelPricing = file.CustomModelPricing
+	}
+	if len(file.RemoteHosts) > 0 {
+		hosts := make([]RemoteHost, len(file.RemoteHosts))
+		for i, h := range file.RemoteHosts {
+			hosts[i] = RemoteHost{
+				Host:      strings.TrimSpace(h.Host),
+				Transport: RemoteTransport(strings.TrimSpace(string(h.Transport))),
+				User:      strings.TrimSpace(h.User),
+				Port:      h.Port,
+				URL:       strings.TrimSpace(h.URL),
+				Token:     strings.TrimSpace(h.Token),
+				Interval:  h.Interval,
+			}
+		}
+		c.RemoteHosts = hosts
+	}
+	if meta.IsDefined("session_sources") {
+		c.sessionSourceConfigs = append([]sessionSourceConfig(nil), file.SessionSources...)
+	}
+
+	// Parse config-file dir arrays for agents that have a
+	// ConfigKey. Only apply when not already set by env var.
+	for _, def := range parser.Registry {
+		if def.ConfigKey == "" {
+			continue
+		}
+		rawVal, exists := raw[def.ConfigKey]
+		if !exists {
+			continue
+		}
+		if c.agentDirSource[def.Type] == dirEnv {
+			continue
+		}
+		rawSlice, ok := rawVal.([]any)
+		if !ok {
+			log.Printf(
+				"config: %s: expected string array: got %T",
+				def.ConfigKey, rawVal,
+			)
+			continue
+		}
+		dirs := make([]string, 0, len(rawSlice))
+		valid := true
+		for _, v := range rawSlice {
+			s, ok := v.(string)
+			if !ok {
+				log.Printf(
+					"config: %s: expected string array: element is %T",
+					def.ConfigKey, v,
+				)
+				valid = false
+				break
+			}
+			dirs = append(dirs, s)
+		}
+		if valid {
+			c.AgentDirs[def.Type] = dirs
+			c.agentDirSource[def.Type] = dirFile
+		}
+	}
+	return nil
+}
+
+func (c *Config) ensureCursorSecret() error {
+	if c.CursorSecret != "" {
+		return nil
+	}
+
+	return c.withConfigLock(func() error {
+		existing, err := c.readConfigMap()
+		if err != nil {
+			return err
+		}
+		if secret, ok := existing["cursor_secret"].(string); ok && secret != "" {
+			c.CursorSecret = secret
+			return nil
+		}
+
+		b := make([]byte, 32)
+		if _, err := rand.Read(b); err != nil {
+			return fmt.Errorf("generating secret: %w", err)
+		}
+		secret := base64.StdEncoding.EncodeToString(b)
+		existing["cursor_secret"] = secret
+		if err := c.writeConfigMap(existing); err != nil {
+			return err
+		}
+		c.CursorSecret = secret
+		return nil
+	})
+}
+
+// readConfigMap reads the TOML config file into a map. Returns
+// an empty map if the file does not exist.
+func (c *Config) readConfigMap() (map[string]any, error) {
+	existing := make(map[string]any)
+	data, err := os.ReadFile(c.configPath())
+	if err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("reading config: %w", err)
+	}
+	if err == nil {
+		if _, err := toml.Decode(string(data), &existing); err != nil {
+			return nil, fmt.Errorf("existing config invalid: %w", err)
+		}
+	}
+	return existing, nil
+}
+
+// writeConfigMap encodes a map as TOML and writes it to the
+// config file.
+func (c *Config) writeConfigMap(m map[string]any) error {
+	var buf bytes.Buffer
+	if err := toml.NewEncoder(&buf).Encode(m); err != nil {
+		return fmt.Errorf("marshaling config: %w", err)
+	}
+	if err := os.WriteFile(c.configPath(), buf.Bytes(), 0o600); err != nil {
+		return fmt.Errorf("writing config: %w", err)
+	}
+	return nil
+}
+
+func (c *Config) withConfigLock(fn func() error) error {
+	if err := os.MkdirAll(c.DataDir, 0o700); err != nil {
+		return fmt.Errorf("creating data dir: %w", err)
+	}
+	lock := flock.New(c.configPath() + ".lock")
+	if err := lock.Lock(); err != nil {
+		return fmt.Errorf("locking config: %w", err)
+	}
+	defer func() {
+		_ = lock.Unlock()
+	}()
+	return fn()
+}
+
+// dataDirFromEnv returns the data directory from the environment, preferring
+// AGENTSVIEW_DATA_DIR and falling back to the legacy AGENT_VIEWER_DATA_DIR.
+// Returns "" when neither is set.
+func dataDirFromEnv() string {
+	if v := os.Getenv("AGENTSVIEW_DATA_DIR"); v != "" {
+		return v
+	}
+	return os.Getenv("AGENT_VIEWER_DATA_DIR")
+}
+
+func (c *Config) loadEnv() {
+	for _, def := range parser.Registry {
+		if v := os.Getenv(def.EnvVar); v != "" {
+			if def.Type == parser.AgentGoose {
+				v = parser.ResolveGoosePathRoot(v)
+				if v == "" {
+					// A whitespace-only override must not replace the
+					// defaults or a configured goose_dirs entry.
+					continue
+				}
+			}
+			c.AgentDirs[def.Type] = []string{v}
+			c.agentDirSource[def.Type] = dirEnv
+		}
+	}
+	if v := dataDirFromEnv(); v != "" {
+		c.DataDir = v
+	}
+	if v := os.Getenv("AGENTSVIEW_AUTH_TOKEN"); v != "" {
+		c.AuthToken = v
+	}
+	if v := os.Getenv("AGENTSVIEW_PG_URL"); v != "" {
+		c.pgEnvOverrides.URL = v
+	}
+	if v := os.Getenv("AGENTSVIEW_PG_SCHEMA"); v != "" {
+		c.pgEnvOverrides.Schema = v
+	}
+	if v := os.Getenv("AGENTSVIEW_PG_MACHINE"); v != "" {
+		c.pgEnvOverrides.MachineName = v
+	}
+	if v := firstEnv(
+		"AGENTSVIEW_CURSOR_ADMIN_API_KEY",
+		"CURSOR_ADMIN_API_KEY",
+	); v != "" {
+		c.CursorAdminAPIKey = v
+	}
+	if v := firstEnv(
+		"AGENTSVIEW_CURSOR_ADMIN_EMAIL",
+		"CURSOR_ADMIN_EMAIL",
+	); v != "" {
+		c.CursorAdminEmail = v
+	}
+	if v := firstEnv(
+		"AGENTSVIEW_CURSOR_ADMIN_USER_ID",
+		"CURSOR_ADMIN_USER_ID",
+	); v != "" {
+		c.CursorAdminUserID = v
+	}
+	if v := os.Getenv("AGENTSVIEW_DUCKDB_PATH"); v != "" {
+		c.DuckDB.Path = v
+	}
+	if v := os.Getenv("AGENTSVIEW_DUCKDB_URL"); v != "" {
+		c.DuckDB.URL = v
+	}
+	if v := os.Getenv("AGENTSVIEW_DUCKDB_TOKEN"); v != "" {
+		c.DuckDB.Token = v
+	}
+	if v := os.Getenv("AGENTSVIEW_DUCKDB_MACHINE"); v != "" {
+		c.DuckDB.MachineName = v
+	}
+	if v := os.Getenv("AGENTSVIEW_DUCKDB_ATTACH_TIMEOUT"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			c.DuckDB.AttachTimeout = d
+		} else {
+			log.Printf(
+				"warning: invalid AGENTSVIEW_DUCKDB_ATTACH_TIMEOUT %q: %v",
+				v, err,
+			)
+		}
+	}
+	if v := os.Getenv("AGENTSVIEW_DISABLE_UPDATE_CHECK"); v != "" {
+		c.DisableUpdateCheck = v == "1" || v == "true"
+	}
+}
+
+func firstEnv(names ...string) string {
+	for _, name := range names {
+		if v := os.Getenv(name); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+type stringListFlag []string
+
+func (f *stringListFlag) String() string {
+	return strings.Join(*f, ",")
+}
+
+func (f *stringListFlag) Set(value string) error {
+	for part := range strings.SplitSeq(value, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		*f = append(*f, part)
+	}
+	return nil
+}
+
+func (f *stringListFlag) Type() string {
+	return "stringList"
+}
+
+// RegisterServeFlags registers serve-command flags on fs.
+// The caller must call fs.Parse before passing fs to Load.
+func RegisterServeFlags(fs *flag.FlagSet) {
+	fs.String("host", "127.0.0.1", "Host to bind to")
+	fs.Int("port", 8080, "Port to listen on")
+	fs.String(
+		"public-url", "",
+		"Public URL to trust and open for hostname or proxy access",
+	)
+	fs.Var(
+		&stringListFlag{},
+		"public-origin",
+		"Trusted browser origin to allow for remote or proxied access (repeatable or comma-separated)",
+	)
+	fs.String(
+		"proxy", "",
+		"Managed reverse proxy mode (currently: caddy)",
+	)
+	fs.String(
+		"caddy-bin", "",
+		"Caddy binary to use when -proxy=caddy (default: caddy)",
+	)
+	fs.String(
+		"proxy-bind-host", "",
+		"Local interface/IP for managed Caddy to bind (default: 0.0.0.0)",
+	)
+	fs.Int(
+		"public-port", 0,
+		"External port for the public URL in managed Caddy mode (default: 8443)",
+	)
+	fs.String(
+		"tls-cert", "",
+		"TLS certificate path for managed Caddy HTTPS mode",
+	)
+	fs.String(
+		"tls-key", "",
+		"TLS key path for managed Caddy HTTPS mode",
+	)
+	fs.Var(
+		&stringListFlag{},
+		"allowed-subnet",
+		"Client CIDR allowed to connect to the managed proxy (repeatable or comma-separated)",
+	)
+	fs.Bool(
+		"no-browser", false,
+		"Don't open browser on startup",
+	)
+	fs.Bool(
+		"no-sync", false,
+		"Skip initial sync and disable background sync/file watching",
+	)
+	fs.Bool(
+		"no-update-check", false,
+		"Disable the update check API endpoint",
+	)
+	fs.Bool(
+		"require-auth", false,
+		"Require a bearer token for all API requests",
+	)
+	fs.Duration(
+		"events-coalesce-interval", 10*time.Second,
+		"Minimum interval between SSE data_changed broadcasts (0 disables coalescing)",
+	)
+	fs.Duration(
+		"write-timeout", 30*time.Second,
+		"Max time to write an API response before a 503 request-timed-out; raise for slow aggregates over large datasets (0 disables)",
+	)
+}
+
+// RegisterServePFlags registers serve-command flags on fs.
+func RegisterServePFlags(fs *pflag.FlagSet) {
+	fs.String("host", "127.0.0.1", "Host to bind to")
+	fs.Int("port", 8080, "Port to listen on")
+	fs.String(
+		"public-url", "",
+		"Public URL to trust and open for hostname or proxy access",
+	)
+	fs.Var(
+		&stringListFlag{},
+		"public-origin",
+		"Trusted browser origin to allow for remote or proxied access (repeatable or comma-separated)",
+	)
+	fs.String(
+		"proxy", "",
+		"Managed reverse proxy mode (currently: caddy)",
+	)
+	fs.String(
+		"caddy-bin", "",
+		"Caddy binary to use when -proxy=caddy (default: caddy)",
+	)
+	fs.String(
+		"proxy-bind-host", "",
+		"Local interface/IP for managed Caddy to bind (default: 0.0.0.0)",
+	)
+	fs.Int(
+		"public-port", 0,
+		"External port for the public URL in managed Caddy mode (default: 8443)",
+	)
+	fs.String(
+		"tls-cert", "",
+		"TLS certificate path for managed Caddy HTTPS mode",
+	)
+	fs.String(
+		"tls-key", "",
+		"TLS key path for managed Caddy HTTPS mode",
+	)
+	fs.Var(
+		&stringListFlag{},
+		"allowed-subnet",
+		"Client CIDR allowed to connect to the managed proxy (repeatable or comma-separated)",
+	)
+	fs.Bool(
+		"no-browser", false,
+		"Don't open browser on startup",
+	)
+	fs.Bool(
+		"no-sync", false,
+		"Skip initial sync and disable background sync/file watching",
+	)
+	fs.Bool(
+		"no-update-check", false,
+		"Disable the update check API endpoint",
+	)
+	fs.Bool(
+		"require-auth", false,
+		"Require a bearer token for all API requests",
+	)
+	fs.Duration(
+		"events-coalesce-interval", 10*time.Second,
+		"Minimum interval between SSE data_changed broadcasts (0 disables coalescing)",
+	)
+	fs.Duration(
+		"write-timeout", 30*time.Second,
+		"Max time to write an API response before a 503 request-timed-out; raise for slow aggregates over large datasets (0 disables)",
+	)
+}
+
+// applyFlags copies explicitly-set flags from fs into cfg.
+func applyFlags(cfg *Config, fs *flag.FlagSet) {
+	if fs == nil {
+		return
+	}
+	fs.Visit(func(f *flag.Flag) {
+		applyFlagValue(cfg, f.Name, f.Value.String())
+	})
+}
+
+// applyPFlags copies explicitly-set pflags from fs into cfg.
+func applyPFlags(cfg *Config, fs *pflag.FlagSet) {
+	if fs == nil {
+		return
+	}
+	fs.Visit(func(f *pflag.Flag) {
+		applyFlagValue(cfg, f.Name, f.Value.String())
+	})
+}
+
+func applyFlagValue(cfg *Config, name, value string) {
+	switch name {
+	case "host":
+		cfg.Host = value
+		cfg.HostExplicit = true
+	case "port":
+		cfg.Port, _ = strconv.Atoi(value)
+	case "public-url":
+		cfg.PublicURL = value
+	case "public-origin":
+		cfg.PublicOrigins = splitFlagList(value)
+	case "proxy":
+		cfg.Proxy.Mode = value
+	case "caddy-bin":
+		cfg.Proxy.Bin = value
+	case "proxy-bind-host":
+		cfg.Proxy.BindHost = value
+	case "public-port":
+		cfg.Proxy.PublicPort, _ = strconv.Atoi(value)
+	case "tls-cert":
+		cfg.Proxy.TLSCert = value
+	case "tls-key":
+		cfg.Proxy.TLSKey = value
+	case "allowed-subnet":
+		cfg.Proxy.AllowedSubnets = splitFlagList(value)
+	case "no-browser":
+		cfg.NoBrowser = value == "true"
+	case "no-sync":
+		cfg.NoSync = value == "true"
+	case "no-update-check":
+		cfg.DisableUpdateCheck = value == "true"
+	case "require-auth":
+		cfg.RequireAuth = value == "true"
+	case "events-coalesce-interval":
+		if d, err := time.ParseDuration(value); err == nil {
+			cfg.EventsCoalesceInterval = d
+		}
+	case "write-timeout":
+		if d, err := time.ParseDuration(value); err == nil {
+			cfg.WriteTimeout = d
+		}
+	case "pg":
+		// Read-routing only. The CLI resolver combines this flag
+		// with cfg.PG from env/config and does not persist a new
+		// config field for it.
+	}
+}
+
+func splitFlagList(value string) []string {
+	if value == "" {
+		return nil
+	}
+	var out []string
+	for part := range strings.SplitSeq(value, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		out = append(out, part)
+	}
+	return out
+}
+
+func finalize(cfg *Config) error {
+	var err error
+	if err := expandLocalPaths(cfg); err != nil {
+		return err
+	}
+	if strings.TrimSpace(cfg.LocalMachineName) == "" {
+		return fmt.Errorf("identify local sync machine: hostname is empty")
+	}
+	if err := cfg.resolveSessionSources(); err != nil {
+		return err
+	}
+	if err := normalizeProxyConfig(&cfg.Proxy); err != nil {
+		return err
+	}
+	cfg.PublicURL, err = resolvePublicURL(cfg.PublicURL, cfg.Proxy)
+	if err != nil {
+		return fmt.Errorf("invalid public url: %w", err)
+	}
+	cfg.PublicOrigins, err = normalizePublicOrigins(cfg.PublicOrigins)
+	if err != nil {
+		return fmt.Errorf("invalid public origins: %w", err)
+	}
+	if cfg.PublicURL != "" {
+		cfg.PublicOrigins, err = normalizePublicOrigins(
+			append(cfg.PublicOrigins, cfg.PublicURL),
+		)
+		if err != nil {
+			return fmt.Errorf("invalid public url: %w", err)
+		}
+	}
+	if cfg.DaemonIdleTimeout < 0 {
+		return fmt.Errorf("invalid daemon_idle_timeout: %s", cfg.DaemonIdleTimeout)
+	}
+	if err := cfg.Vector.Validate(); err != nil {
+		return err
+	}
+	if err := cfg.Recall.Extract.Validate(); err != nil {
+		return err
+	}
+	if err := cfg.Insights.Validate(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *Config) resolveSessionSources() error {
+	type rootState struct {
+		dir     string
+		machine string
+	}
+
+	resolved := make([]SessionSource, 0)
+	rootsByAgent := make(map[parser.AgentType]map[string]rootState, len(c.AgentDirs))
+	for _, def := range parser.Registry {
+		seen := make(map[string]rootState)
+		dirs := make([]string, 0, len(c.AgentDirs[def.Type]))
+		for _, rawDir := range c.AgentDirs[def.Type] {
+			value := strings.TrimSpace(rawDir)
+			if value == "" {
+				continue
+			}
+			key, err := sessionSourceComparisonKey(value)
+			if err != nil {
+				return fmt.Errorf(
+					"resolve %s session source %q: %w", def.Type, value, err,
+				)
+			}
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = rootState{
+				dir:     value,
+				machine: c.LocalMachineName,
+			}
+			dirs = append(dirs, value)
+		}
+		c.AgentDirs[def.Type] = dirs
+		rootsByAgent[def.Type] = seen
+	}
+
+	var problems []string
+	for i, input := range c.sessionSourceConfigs {
+		entry := i + 1
+		agent := parser.AgentType(strings.TrimSpace(strings.ToLower(input.Agent)))
+		if agent == "" {
+			problems = append(problems,
+				fmt.Sprintf("entry %d: agent is required", entry))
+			continue
+		}
+		if _, ok := parser.AgentByType(agent); !ok {
+			problems = append(problems,
+				fmt.Sprintf("entry %d: unknown agent %q; use a registered parser name such as claude, codex, or copilot", entry, input.Agent))
+			continue
+		}
+		factory, hasFactory := parser.ProviderFactoryByType(agent)
+		if !hasFactory ||
+			factory.Capabilities().Source.DiscoverSources != parser.CapabilitySupported {
+			problems = append(problems,
+				fmt.Sprintf("entry %d (%s): session_sources requires a discoverable filesystem provider; %s is import-only", entry, agent, agent))
+			continue
+		}
+		rawDir := strings.TrimSpace(input.Dir)
+		if strings.HasPrefix(strings.ToLower(rawDir), "s3://") {
+			problems = append(problems,
+				fmt.Sprintf("entry %d (%s): dir %q is an S3 root; session_sources supports filesystem roots only, so configure S3 through the existing per-agent directory setting", entry, agent, input.Dir))
+			continue
+		}
+		dir, err := normalizeSessionSourceDir(input.Dir)
+		if err != nil {
+			problems = append(problems,
+				fmt.Sprintf("entry %d (%s): %v", entry, agent, err))
+			continue
+		}
+		machine := c.LocalMachineName
+		if input.Machine != nil {
+			machine = strings.TrimSpace(*input.Machine)
+			if machine == "" {
+				problems = append(problems,
+					fmt.Sprintf("entry %d (%s): machine must not be empty when set", entry, agent))
+				continue
+			}
+			if machine == "local" {
+				problems = append(problems,
+					fmt.Sprintf("entry %d (%s): machine %q is reserved for legacy local attribution; use the actual machine name or omit machine", entry, agent, machine))
+				continue
+			}
+		}
+
+		seen := rootsByAgent[agent]
+		if seen == nil {
+			seen = make(map[string]rootState)
+			rootsByAgent[agent] = seen
+		}
+		key, err := sessionSourceComparisonKey(dir)
+		if err != nil {
+			problems = append(problems,
+				fmt.Sprintf("entry %d (%s): %v", entry, agent, err))
+			continue
+		}
+		state, duplicate := seen[key]
+		if duplicate {
+			state.machine = machine
+			seen[key] = state
+		} else {
+			seen[key] = rootState{
+				dir:     dir,
+				machine: machine,
+			}
+			c.AgentDirs[agent] = append(c.AgentDirs[agent], dir)
+		}
+		c.agentDirSource[agent] = dirFile
+		resolved = append(resolved, SessionSource{
+			Agent: agent, Dir: dir, Machine: machine,
+		})
+	}
+	if len(problems) > 0 {
+		return fmt.Errorf("session_sources: %s", strings.Join(problems, "; "))
+	}
+
+	sourceMachines := make(map[parser.AgentType]map[string]string, len(rootsByAgent))
+	for agent, roots := range rootsByAgent {
+		machines := make(map[string]string, len(roots))
+		for _, state := range roots {
+			if strings.HasPrefix(strings.ToLower(state.dir), "s3://") {
+				continue
+			}
+			machines[state.dir] = state.machine
+		}
+		sourceMachines[agent] = machines
+	}
+	c.SessionSources = resolved
+	c.SourceMachines = sourceMachines
+	return nil
+}
+
+func sessionSourceComparisonKey(dir string) (string, error) {
+	if strings.HasPrefix(strings.ToLower(dir), "s3://") {
+		return dir, nil
+	}
+	return pathutil.LocalComparisonKey(dir)
+}
+
+func normalizeSessionSourceDir(raw string) (string, error) {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return "", fmt.Errorf("dir is required")
+	}
+	if strings.ContainsRune(value, '\x00') {
+		return "", fmt.Errorf("dir %q contains a NUL byte", raw)
+	}
+	// Structured sources resolve after expandLocalPaths has already expanded
+	// the legacy per-agent arrays, so expand here too. Without it a "~/..."
+	// root is never scanned and cannot deduplicate against, or relabel, the
+	// equivalent expanded legacy root. This resolves the path only; separator
+	// and case spelling are still left exactly as configured.
+	expanded, err := pathutil.ExpandHome(value)
+	if err != nil {
+		return "", fmt.Errorf("expanding dir %q: %w", raw, err)
+	}
+	return expanded, nil
+}
+
+func resolvePublicURL(value string, proxyCfg ProxyConfig) (string, error) {
+	if strings.TrimSpace(value) == "" {
+		return "", nil
+	}
+	u, err := url.Parse(strings.TrimSpace(value))
+	if err != nil {
+		return "", err
+	}
+	if u == nil || u.Host == "" {
+		return "", fmt.Errorf("%q must include a host", value)
+	}
+	if u.User != nil {
+		return "", fmt.Errorf("%q must not include user info", value)
+	}
+	if u.RawQuery != "" || u.Fragment != "" {
+		return "", fmt.Errorf("%q must not include query or fragment", value)
+	}
+	if u.Path != "" && u.Path != "/" {
+		return "", fmt.Errorf("%q must not include a path", value)
+	}
+	if proxyCfg.Mode != "caddy" {
+		return normalizePublicOrigin(value)
+	}
+
+	scheme := strings.ToLower(u.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return "", fmt.Errorf("%q must use http or https", value)
+	}
+	resolvedPort := proxyCfg.PublicPort
+	if resolvedPort == 0 {
+		resolvedPort = 8443
+	}
+	if rawPort := u.Port(); rawPort != "" {
+		explicitPort, err := strconv.Atoi(rawPort)
+		if err != nil || explicitPort < 1 || explicitPort > 65535 {
+			return "", fmt.Errorf("%q has an invalid port", value)
+		}
+		if proxyCfg.PublicPort != 0 && explicitPort != proxyCfg.PublicPort {
+			return "", fmt.Errorf(
+				"%q conflicts with configured public port %d",
+				value, proxyCfg.PublicPort,
+			)
+		}
+		resolvedPort = explicitPort
+	}
+
+	host := strings.ToLower(u.Hostname())
+	if host == "" {
+		return "", fmt.Errorf("%q must include a host", value)
+	}
+	if resolvedPort == defaultPortForScheme(scheme) {
+		return scheme + "://" + hostLiteral(host), nil
+	}
+	return scheme + "://" + net.JoinHostPort(host, strconv.Itoa(resolvedPort)), nil
+}
+
+func normalizePublicOrigins(origins []string) ([]string, error) {
+	if len(origins) == 0 {
+		return nil, nil
+	}
+	normalized := make([]string, 0, len(origins))
+	seen := make(map[string]bool, len(origins))
+	for _, origin := range origins {
+		if strings.TrimSpace(origin) == "" {
+			continue
+		}
+		norm, err := normalizePublicOrigin(origin)
+		if err != nil {
+			return nil, err
+		}
+		if seen[norm] {
+			continue
+		}
+		seen[norm] = true
+		normalized = append(normalized, norm)
+	}
+	if len(normalized) == 0 {
+		return nil, nil
+	}
+	return normalized, nil
+}
+
+func normalizePublicOrigin(origin string) (string, error) {
+	origin = strings.TrimSpace(origin)
+	u, err := url.Parse(origin)
+	if err != nil {
+		return "", fmt.Errorf("parsing %q: %w", origin, err)
+	}
+	if u == nil || u.Host == "" {
+		return "", fmt.Errorf("%q must include a host", origin)
+	}
+	if u.User != nil {
+		return "", fmt.Errorf("%q must not include user info", origin)
+	}
+	if u.RawQuery != "" || u.Fragment != "" {
+		return "", fmt.Errorf("%q must not include query or fragment", origin)
+	}
+	if u.Path != "" && u.Path != "/" {
+		return "", fmt.Errorf("%q must not include a path", origin)
+	}
+
+	scheme := strings.ToLower(u.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return "", fmt.Errorf("%q must use http or https", origin)
+	}
+
+	host := strings.ToLower(u.Hostname())
+	if host == "" {
+		return "", fmt.Errorf("%q must include a host", origin)
+	}
+	port := u.Port()
+	if port != "" {
+		n, err := strconv.Atoi(port)
+		if err != nil || n < 1 || n > 65535 {
+			return "", fmt.Errorf("%q has an invalid port", origin)
+		}
+		if n == defaultPortForScheme(scheme) {
+			port = ""
+		}
+	}
+
+	if port == "" {
+		return scheme + "://" + hostLiteral(host), nil
+	}
+	return scheme + "://" + net.JoinHostPort(host, port), nil
+}
+
+func normalizeProxyConfig(cfg *ProxyConfig) error {
+	if cfg == nil {
+		return nil
+	}
+	cfg.Mode = strings.ToLower(strings.TrimSpace(cfg.Mode))
+	switch cfg.Mode {
+	case "", "caddy":
+	default:
+		return fmt.Errorf("invalid proxy mode %q", cfg.Mode)
+	}
+	if cfg.Mode == "caddy" && strings.TrimSpace(cfg.Bin) == "" {
+		cfg.Bin = "caddy"
+	}
+	if cfg.Mode == "caddy" {
+		cfg.BindHost = strings.TrimSpace(cfg.BindHost)
+		if cfg.BindHost == "" {
+			cfg.BindHost = "127.0.0.1"
+		}
+		if cfg.PublicPort < 0 || cfg.PublicPort > 65535 {
+			return fmt.Errorf("invalid public port %d", cfg.PublicPort)
+		}
+	}
+	var err error
+	cfg.AllowedSubnets, err = normalizeAllowedSubnets(cfg.AllowedSubnets)
+	if err != nil {
+		return fmt.Errorf("invalid allowed subnets: %w", err)
+	}
+	return nil
+}
+
+func normalizeAllowedSubnets(subnets []string) ([]string, error) {
+	if len(subnets) == 0 {
+		return nil, nil
+	}
+	normalized := make([]string, 0, len(subnets))
+	seen := make(map[string]bool, len(subnets))
+	for _, subnet := range subnets {
+		subnet = strings.TrimSpace(subnet)
+		if subnet == "" {
+			continue
+		}
+		network, err := parseAllowedSubnet(subnet)
+		if err != nil {
+			return nil, fmt.Errorf("parsing %q: %w", subnet, err)
+		}
+		value := network.String()
+		if seen[value] {
+			continue
+		}
+		seen[value] = true
+		normalized = append(normalized, value)
+	}
+	if len(normalized) == 0 {
+		return nil, nil
+	}
+	return normalized, nil
+}
+
+func parseAllowedSubnet(value string) (*net.IPNet, error) {
+	_, network, err := net.ParseCIDR(value)
+	if err == nil {
+		return network, nil
+	}
+	expanded, ok := expandIPv4CIDRShorthand(value)
+	if !ok {
+		return nil, err
+	}
+	_, network, err = net.ParseCIDR(expanded)
+	if err != nil {
+		return nil, err
+	}
+	return network, nil
+}
+
+func expandIPv4CIDRShorthand(value string) (string, bool) {
+	addr, mask, ok := strings.Cut(value, "/")
+	if !ok || strings.Contains(addr, ":") {
+		return "", false
+	}
+	parts := strings.Split(addr, ".")
+	if len(parts) == 0 || len(parts) > 4 {
+		return "", false
+	}
+	if slices.Contains(parts, "") {
+		return "", false
+	}
+	for len(parts) < 4 {
+		parts = append(parts, "0")
+	}
+	return strings.Join(parts, ".") + "/" + mask, true
+}
+
+func defaultPortForScheme(scheme string) int {
+	if scheme == "https" {
+		return 443
+	}
+	return 80
+}
+
+func hostLiteral(host string) string {
+	if strings.Contains(host, ":") {
+		return "[" + host + "]"
+	}
+	return host
+}
+
+func normalizePGTargetName(name string) string {
+	return strings.TrimSpace(strings.ToLower(name))
+}
+
+func isReservedPGTargetName(name string) bool {
+	switch normalizePGTargetName(name) {
+	case "all", "local":
+		return true
+	default:
+		return false
+	}
+}
+
+func decodePGConfigMap(raw map[string]any) (PGConfig, error) {
+	var buf bytes.Buffer
+	if err := toml.NewEncoder(&buf).Encode(raw); err != nil {
+		return PGConfig{}, fmt.Errorf("encoding pg config: %w", err)
+	}
+	var cfg PGConfig
+	if _, err := toml.Decode(buf.String(), &cfg); err != nil {
+		return PGConfig{}, fmt.Errorf("decoding pg config: %w", err)
+	}
+	return cfg, nil
+}
+
+func parsePGConfigSection(value any) (PGConfig, map[string]PGConfig, error) {
+	if value == nil {
+		return PGConfig{}, nil, nil
+	}
+	section, ok := value.(map[string]any)
+	if !ok {
+		return PGConfig{}, nil, fmt.Errorf("expected [pg] to be a table")
+	}
+	hasLegacyFields := false
+	hasNamedTargets := false
+	legacyRaw := make(map[string]any)
+	namedTargets := make(map[string]PGConfig)
+	seenNames := make(map[string]string)
+	for rawName, rawValue := range section {
+		name := normalizePGTargetName(rawName)
+		if _, ok := pgConfigKeys[name]; ok {
+			if _, nested := rawValue.(map[string]any); nested {
+				return PGConfig{}, nil, fmt.Errorf(
+					"[pg].%s must be a scalar or array field, not a nested table",
+					rawName,
+				)
+			}
+			hasLegacyFields = true
+			legacyRaw[rawName] = rawValue
+			continue
+		}
+		targetRaw, ok := rawValue.(map[string]any)
+		if !ok {
+			return PGConfig{}, nil, fmt.Errorf(
+				"[pg].%s must be a named target table",
+				rawName,
+			)
+		}
+		hasNamedTargets = true
+		if name == "" {
+			return PGConfig{}, nil, fmt.Errorf(
+				"named PG targets must not be blank",
+			)
+		}
+		if isReservedPGTargetName(name) {
+			return PGConfig{}, nil, fmt.Errorf(
+				"named PG target %q is reserved",
+				name,
+			)
+		}
+		if prev, exists := seenNames[name]; exists {
+			return PGConfig{}, nil, fmt.Errorf(
+				"named PG targets %q and %q normalize to the same name %q",
+				prev, rawName, name,
+			)
+		}
+		seenNames[name] = rawName
+		targetCfg, err := decodePGConfigMap(targetRaw)
+		if err != nil {
+			return PGConfig{}, nil, fmt.Errorf(
+				"[pg].%s: %w", rawName, err,
+			)
+		}
+		namedTargets[name] = targetCfg
+	}
+	if hasLegacyFields && hasNamedTargets {
+		return PGConfig{}, nil, fmt.Errorf(
+			"cannot mix legacy [pg] fields with named [pg.NAME] targets",
+		)
+	}
+	if hasLegacyFields {
+		legacyCfg, err := decodePGConfigMap(legacyRaw)
+		if err != nil {
+			return PGConfig{}, nil, err
+		}
+		return legacyCfg, nil, nil
+	}
+	if hasNamedTargets {
+		return PGConfig{}, namedTargets, nil
+	}
+	return PGConfig{}, nil, nil
+}
+
+// ResolveDataDir returns the effective data directory by applying
+// defaults and environment overrides, without reading any files.
+// Use this to determine where migration should target before
+// calling Load or LoadMinimal.
+func ResolveDataDir() (string, error) {
+	cfg, err := Default()
+	if err != nil {
+		return "", err
+	}
+	if v := dataDirFromEnv(); v != "" {
+		cfg.DataDir = v
+	}
+	if err := expandDataDir(&cfg); err != nil {
+		return "", err
+	}
+	return cfg.DataDir, nil
+}
+
+// IsDefaultAgentsviewDataDir reports whether path is (or symlink-resolves to) a
+// default ~/.agentsview data directory. It is the single guard shared by the
+// CLI and HTTP recall-import paths.
+func IsDefaultAgentsviewDataDir(path string) bool {
+	clean := filepath.Clean(strings.TrimSpace(path))
+	if clean == "" || clean == "." {
+		return false
+	}
+	if filepath.Base(clean) == ".agentsview" {
+		return true
+	}
+	resolved, err := filepath.EvalSymlinks(clean)
+	if err != nil {
+		return false
+	}
+	return filepath.Base(filepath.Clean(resolved)) == ".agentsview"
+}
+
+// IsDefaultAgentsviewDBPath reports whether dbPath lives inside a default
+// ~/.agentsview directory after resolving symlinks. It also resolves a direct
+// symlink whose target does not exist yet, so a lab sessions.db pointing at a
+// not-yet-created ~/.agentsview/sessions.db is still guarded: opening SQLite
+// through that dangling link would otherwise create the production archive.
+func IsDefaultAgentsviewDBPath(dbPath string) bool {
+	dbPath = strings.TrimSpace(dbPath)
+	if dbPath == "" {
+		return false
+	}
+	if resolved, err := filepath.EvalSymlinks(dbPath); err == nil {
+		if defaultAgentsviewDBDir(resolved) {
+			return true
+		}
+	}
+	if target, err := os.Readlink(dbPath); err == nil {
+		if !filepath.IsAbs(target) {
+			target = filepath.Join(filepath.Dir(dbPath), target)
+		}
+		if defaultAgentsviewDBDir(target) {
+			return true
+		}
+	}
+	return false
+}
+
+func defaultAgentsviewDBDir(dbPath string) bool {
+	return filepath.Base(filepath.Dir(filepath.Clean(dbPath))) == ".agentsview"
+}
+
+// DefaultPGTargetName returns the effective named PG target for this config.
+func (c *Config) DefaultPGTargetName() (string, error) {
+	if len(c.PGTargets) == 0 {
+		if c.DefaultPG != "" {
+			return "", fmt.Errorf(
+				"default_pg requires named [pg.NAME] targets",
+			)
+		}
+		return "", nil
+	}
+	if c.DefaultPG != "" {
+		if _, ok := c.PGTargets[c.DefaultPG]; !ok {
+			return "", fmt.Errorf(
+				"default_pg %q does not match any named [pg.NAME] target",
+				c.DefaultPG,
+			)
+		}
+		return c.DefaultPG, nil
+	}
+	if len(c.PGTargets) == 1 {
+		for name := range c.PGTargets {
+			return name, nil
+		}
+	}
+	return "", fmt.Errorf(
+		"default_pg is required when more than one [pg.NAME] target is defined",
+	)
+}
+
+func (c *Config) validatePGTargets() error {
+	_, err := c.DefaultPGTargetName()
+	return err
+}
+
+func (c *Config) PGTargetNames() ([]string, string, error) {
+	if err := c.validatePGTargets(); err != nil {
+		return nil, "", err
+	}
+	if len(c.PGTargets) == 0 {
+		return nil, "", nil
+	}
+	defaultName, err := c.DefaultPGTargetName()
+	if err != nil {
+		return nil, "", err
+	}
+	names := make([]string, 0, len(c.PGTargets))
+	for name := range c.PGTargets {
+		names = append(names, name)
+	}
+	sort.Slice(names, func(i, j int) bool {
+		if names[i] == defaultName {
+			return true
+		}
+		if names[j] == defaultName {
+			return false
+		}
+		return names[i] < names[j]
+	})
+	return names, defaultName, nil
+}
+
+// RawPGTarget returns the configured PG target before env expansion and
+// default-field synthesis. An empty name selects the effective default target.
+func (c *Config) RawPGTarget(name string) (PGConfig, error) {
+	if err := c.validatePGTargets(); err != nil {
+		return PGConfig{}, err
+	}
+	targetName := normalizePGTargetName(name)
+	if len(c.PGTargets) == 0 {
+		if targetName != "" {
+			return PGConfig{}, fmt.Errorf(
+				"pg target %q is not configured; config uses a single legacy [pg] block",
+				name,
+			)
+		}
+		return c.PG, nil
+	}
+	if targetName == "" {
+		var err error
+		targetName, err = c.DefaultPGTargetName()
+		if err != nil {
+			return PGConfig{}, err
+		}
+	}
+	targetCfg, ok := c.PGTargets[targetName]
+	if !ok {
+		return PGConfig{}, fmt.Errorf(
+			"pg target %q is not configured",
+			targetName,
+		)
+	}
+	return targetCfg, nil
+}
+
+func (c *Config) resolvePGConfig(
+	pg PGConfig, applyDefaultEnv bool,
+) (PGConfig, error) {
+	if applyDefaultEnv {
+		if c.pgEnvOverrides.URL != "" {
+			pg.URL = c.pgEnvOverrides.URL
+		}
+		if c.pgEnvOverrides.Schema != "" {
+			pg.Schema = c.pgEnvOverrides.Schema
+		}
+		if c.pgEnvOverrides.MachineName != "" {
+			pg.MachineName = c.pgEnvOverrides.MachineName
+		}
+	}
+	if pg.URL != "" {
+		expanded, err := expandBracedEnv(pg.URL)
+		if err != nil {
+			return pg, fmt.Errorf("expanding url: %w", err)
+		}
+		pg.URL = expanded
+	}
+	if pg.Schema == "" {
+		pg.Schema = "agentsview"
+	}
+	if pg.MachineName == "" {
+		h, err := os.Hostname()
+		if err != nil {
+			return pg, fmt.Errorf("os.Hostname failed (%w); set machine_name explicitly in config", err)
+		}
+		pg.MachineName = h
+	}
+	return pg, nil
+}
+
+// ResolvePG returns the effective default PG target with defaults applied
+// and environment variables expanded in URL.
+func (c *Config) ResolvePG() (PGConfig, error) {
+	return c.ResolvePGTarget("")
+}
+
+// ResolvePGTarget resolves one named PG target, or the effective default
+// target when name is empty. In legacy single-target mode, only the empty
+// name is valid.
+func (c *Config) ResolvePGTarget(name string) (PGConfig, error) {
+	if err := c.validatePGTargets(); err != nil {
+		return PGConfig{}, err
+	}
+	targetName := normalizePGTargetName(name)
+	if len(c.PGTargets) == 0 {
+		if targetName != "" {
+			return PGConfig{}, fmt.Errorf(
+				"pg target %q is not configured; config uses a single legacy [pg] block",
+				name,
+			)
+		}
+		return c.resolvePGConfig(c.PG, true)
+	}
+	defaultName, err := c.DefaultPGTargetName()
+	if err != nil {
+		return PGConfig{}, err
+	}
+	if targetName == "" {
+		targetName = defaultName
+	}
+	targetCfg, ok := c.PGTargets[targetName]
+	if !ok {
+		return PGConfig{}, fmt.Errorf(
+			"pg target %q is not configured",
+			targetName,
+		)
+	}
+	return c.resolvePGConfig(targetCfg, targetName == defaultName)
+}
+
+// ResolvePGTargets resolves every configured PG target. Legacy single-target
+// mode returns one unnamed default target.
+func (c *Config) ResolvePGTargets() ([]ResolvedPGTarget, error) {
+	if err := c.validatePGTargets(); err != nil {
+		return nil, err
+	}
+	if len(c.PGTargets) == 0 {
+		pg, err := c.resolvePGConfig(c.PG, true)
+		if err != nil {
+			return nil, err
+		}
+		return []ResolvedPGTarget{{
+			Config:    pg,
+			IsDefault: true,
+		}}, nil
+	}
+	names, defaultName, err := c.PGTargetNames()
+	if err != nil {
+		return nil, err
+	}
+	targets := make([]ResolvedPGTarget, 0, len(names))
+	for _, name := range names {
+		targetCfg, err := c.resolvePGConfig(
+			c.PGTargets[name], name == defaultName,
+		)
+		if err != nil {
+			return nil, err
+		}
+		targets = append(targets, ResolvedPGTarget{
+			Name:      name,
+			Config:    targetCfg,
+			IsDefault: name == defaultName,
+		})
+	}
+	return targets, nil
+}
+
+// ResolveDuckDB returns a copy of DuckDB config with defaults applied
+// and environment variables expanded in path, URL, and token.
+func (c *Config) ResolveDuckDB() (DuckDBConfig, error) {
+	duck := c.DuckDB
+	if duck.Path != "" {
+		expanded, err := expandBracedEnv(duck.Path)
+		if err != nil {
+			return duck, fmt.Errorf("expanding path: %w", err)
+		}
+		expanded, err = pathutil.ExpandHome(expanded)
+		if err != nil {
+			return duck, fmt.Errorf("expanding path: %w", err)
+		}
+		duck.Path = expanded
+	}
+	if duck.URL != "" {
+		expanded, err := expandBracedEnv(duck.URL)
+		if err != nil {
+			return duck, fmt.Errorf("expanding url: %w", err)
+		}
+		duck.URL = expanded
+	}
+	if duck.Token != "" {
+		expanded, err := expandBracedEnv(duck.Token)
+		if err != nil {
+			return duck, fmt.Errorf("expanding token: %w", err)
+		}
+		duck.Token = expanded
+	}
+	if duck.Path == "" {
+		duck.Path = filepath.Join(c.DataDir, "sessions.duckdb")
+	}
+	if duck.MachineName == "" {
+		h, err := os.Hostname()
+		if err != nil {
+			return duck, fmt.Errorf("os.Hostname failed (%w); set machine_name explicitly in config", err)
+		}
+		duck.MachineName = h
+	}
+	return duck, nil
+}
+
+var (
+	bracedEnvPattern      = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
+	bareEnvPattern        = regexp.MustCompile(`^\$([A-Za-z_][A-Za-z0-9_]*)$`)
+	partialBareEnvPattern = regexp.MustCompile(`\$([A-Za-z_][A-Za-z0-9_]*)`)
+)
+
+// IsEnvDependentURL reports whether s would have environment variables
+// expanded by expandBracedEnv: it contains any ${VAR} reference, or the
+// whole string is a single bare $VAR shortcut. Embedded bare $VAR
+// references (e.g. "postgres://$USER@host") are deliberately NOT expanded
+// and so do not count. Callers that must persist a literal URL into a
+// context without the shell environment (e.g. a background service) use
+// this to reject env-dependent values. It shares the exact patterns
+// expandBracedEnv uses so the rejection check cannot drift from the
+// expansion semantics.
+func IsEnvDependentURL(s string) bool {
+	return bracedEnvPattern.MatchString(s) ||
+		bareEnvPattern.MatchString(strings.TrimSpace(s))
+}
+
+// bareEnvWarned tracks which bare $VAR names have already been warned
+// about, so each distinct variable triggers a warning at most once.
+var bareEnvWarned sync.Map
+
+// expandBracedEnv expands ${VAR} references in s. As a convenience,
+// if the entire string is a single bare $VAR (e.g. "$PGURL"), it is
+// expanded as a whole-string shortcut. Bare $VAR references embedded
+// in a larger string (e.g. "postgres://$USER@host") are NOT expanded;
+// use ${VAR} syntax instead.
+func expandBracedEnv(s string) (string, error) {
+	if parts := bareEnvPattern.FindStringSubmatch(s); parts != nil {
+		val, ok := os.LookupEnv(parts[1])
+		if !ok {
+			return "", fmt.Errorf("environment variable %s is not set", parts[1])
+		}
+		return val, nil
+	}
+
+	// Warn about bare $VAR references that won't be expanded.
+	if remaining := bracedEnvPattern.ReplaceAllString(s, ""); partialBareEnvPattern.MatchString(remaining) {
+		for _, m := range partialBareEnvPattern.FindAllStringSubmatch(remaining, -1) {
+			if _, set := os.LookupEnv(m[1]); set {
+				if _, warned := bareEnvWarned.LoadOrStore(m[1], true); !warned {
+					log.Printf("warning: pg.url contains bare $%s which will NOT be expanded; use ${%s} syntax instead", m[1], m[1])
+				}
+			}
+		}
+	}
+
+	var missingVars []string
+	result := bracedEnvPattern.ReplaceAllStringFunc(s, func(match string) string {
+		name := bracedEnvPattern.FindStringSubmatch(match)[1]
+		val, ok := os.LookupEnv(name)
+		if !ok {
+			missingVars = append(missingVars, name)
+			return ""
+		}
+		return val
+	})
+	if len(missingVars) > 0 {
+		return "", fmt.Errorf("environment variable(s) not set: %s",
+			strings.Join(missingVars, ", "))
+	}
+	return result, nil
+}
+
+// SaveTerminalConfig persists terminal settings to the config file.
+func (c *Config) SaveTerminalConfig(tc TerminalConfig) error {
+	live := tc
+	expanded, err := pathutil.ExpandHome(live.CustomBin)
+	if err != nil {
+		return fmt.Errorf("expanding terminal custom binary: %w", err)
+	}
+	live.CustomBin = expanded
+
+	return c.withConfigLock(func() error {
+		existing, err := c.readConfigMap()
+		if err != nil {
+			return fmt.Errorf("reading config file: %w", err)
+		}
+
+		existing["terminal"] = tc
+		if err := c.writeConfigMap(existing); err != nil {
+			return err
+		}
+		c.Terminal = live
+		return nil
+	})
+}
+
+// SaveSettings persists a partial settings update to the config file.
+// The patch map contains config keys mapped to their new values. Only
+// the keys present in patch are written; other config keys are preserved.
+func (c *Config) SaveSettings(patch map[string]any) error {
+	patch = maps.Clone(patch)
+	if value, ok := patch["chart_palette"]; ok {
+		palette, ok := value.(ChartPalette)
+		if !ok {
+			return fmt.Errorf("chart_palette must use the typed configuration value")
+		}
+		if _, err := ParseChartPalette(string(palette)); err != nil {
+			return err
+		}
+	}
+	if value, ok := patch["disabled_agents"]; ok {
+		agents, ok := value.([]parser.AgentType)
+		if !ok {
+			return fmt.Errorf(
+				"disabled_agents must use typed session provider values",
+			)
+		}
+		raw := make([]string, len(agents))
+		for i, agent := range agents {
+			raw[i] = string(agent)
+		}
+		normalized, err := NormalizeDisabledAgents(raw)
+		if err != nil {
+			return err
+		}
+		patch["disabled_agents"] = normalized
+	}
+	return c.withConfigLock(func() error {
+		existing, err := c.readConfigMap()
+		if err != nil {
+			return fmt.Errorf("reading config file: %w", err)
+		}
+
+		maps.Copy(existing, patch)
+
+		// When require_auth is written, remove the legacy
+		// remote_access key so it cannot override on next load.
+		if _, ok := patch["require_auth"]; ok {
+			delete(existing, "remote_access")
+		}
+
+		if err := c.writeConfigMap(existing); err != nil {
+			return err
+		}
+
+		// Update in-memory config for known keys.
+		if v, ok := patch["terminal"]; ok {
+			if tc, ok := v.(TerminalConfig); ok {
+				c.Terminal = tc
+			} else if m, ok := v.(map[string]any); ok {
+				if s, ok := m["mode"].(string); ok {
+					c.Terminal.Mode = s
+				}
+				if s, ok := m["custom_bin"].(string); ok {
+					c.Terminal.CustomBin = s
+				}
+				if s, ok := m["custom_args"].(string); ok {
+					c.Terminal.CustomArgs = s
+				}
+			}
+		}
+		if v, ok := patch["github_token"]; ok {
+			if s, ok := v.(string); ok {
+				c.GithubToken = s
+			}
+		}
+		if v, ok := patch["auth_token"]; ok {
+			if s, ok := v.(string); ok {
+				c.AuthToken = s
+			}
+		}
+		if v, ok := patch["require_auth"]; ok {
+			if b, ok := v.(bool); ok {
+				c.RequireAuth = b
+			}
+		}
+		if v, ok := patch["chart_palette"]; ok {
+			if palette, ok := v.(ChartPalette); ok {
+				c.ChartPalette = palette
+			}
+		}
+		if v, ok := patch["disabled_agents"]; ok {
+			if agents, ok := v.([]parser.AgentType); ok {
+				c.DisabledAgents = append([]parser.AgentType(nil), agents...)
+			}
+		}
+		return nil
+	})
+}
+
+// EnsureAuthToken generates and persists an auth token if one does
+// not already exist. Called when require_auth is enabled.
+func (c *Config) EnsureAuthToken() error {
+	if c.AuthToken != "" {
+		return nil
+	}
+	return c.withConfigLock(func() error {
+		existing, err := c.readConfigMap()
+		if err != nil {
+			return err
+		}
+		if token, ok := existing["auth_token"].(string); ok && token != "" {
+			c.AuthToken = token
+			return nil
+		}
+
+		b := make([]byte, 32)
+		if _, err := rand.Read(b); err != nil {
+			return fmt.Errorf("generating auth token: %w", err)
+		}
+		token := base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(b)
+		existing["auth_token"] = token
+		if err := c.writeConfigMap(existing); err != nil {
+			return err
+		}
+		c.AuthToken = token
+		return nil
+	})
+}
+
+// ValidateArtifactOriginID checks the persisted single-writer origin prefix.
+func ValidateArtifactOriginID(origin string) error {
+	if origin == "" {
+		return errors.New("artifact origin is required")
+	}
+	if origin != strings.TrimSpace(origin) {
+		return fmt.Errorf("invalid artifact origin %q", origin)
+	}
+	if origin == "local" {
+		return fmt.Errorf("invalid artifact origin %q", origin)
+	}
+	if strings.ContainsAny(origin, `/\`) || filepath.Base(origin) != origin {
+		return fmt.Errorf("invalid artifact origin %q", origin)
+	}
+	if strings.HasPrefix(origin, "-") || strings.HasSuffix(origin, "-") {
+		return fmt.Errorf("invalid artifact origin %q", origin)
+	}
+	for _, r := range origin {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-' {
+			continue
+		}
+		return fmt.Errorf("invalid artifact origin %q", origin)
+	}
+	return nil
+}
+
+// SaveGithubToken persists the GitHub token to the config file.
+func (c *Config) SaveGithubToken(token string) error {
+	return c.withConfigLock(func() error {
+		existing, err := c.readConfigMap()
+		if err != nil {
+			return fmt.Errorf("reading config file: %w", err)
+		}
+
+		existing["github_token"] = token
+		if err := c.writeConfigMap(existing); err != nil {
+			return fmt.Errorf("writing config: %w", err)
+		}
+		c.GithubToken = token
+		return nil
+	})
+}
