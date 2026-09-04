@@ -13,7 +13,7 @@
 </script>
 
 {#if $tocVisible && $tocEntries.length > 0}
-  <aside class="toc-sidebar fixed bg border-right overflow-y-auto">
+  <div class="box wfull">
     <div class="toc-header pad-x-sm pad-top-xs text-xs weight-600 tt-u text-muted">
       On this page
     </div>
@@ -29,5 +29,5 @@
         </button>
       {/each}
     </nav>
-  </aside>
+  </div>
 {/if}

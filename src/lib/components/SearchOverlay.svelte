@@ -133,7 +133,7 @@
 </script>
 {#if visible}
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="search-bar fixed row ycenter gap-2xs bg border   pad-x-2xs pad-y-3xs" onkeydown={handleKeydown}>
+	<div class="search-bar fixed row ycenter gap-2xs bg border pad-x-2xs pad-y-3xs" onkeydown={handleKeydown}>
 		<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" class="text-muted shrink-0">
 			<circle cx="6" cy="6" r="4.5" /><line x1="9.5" y1="9.5" x2="13" y2="13" />
 		</svg>

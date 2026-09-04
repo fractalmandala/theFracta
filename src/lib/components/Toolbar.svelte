@@ -189,7 +189,7 @@
 			</button>
 
 			{#if showCopyMenu}
-				<div class="dropdown popover-shadow fixed bg border  pad-3xs">
+				<div class="dropdown popover-shadow fixed bg border pad-3xs">
 					<button onclick={handleCopyRichText} class="dropdown-item row ycenter xbetween gap-2xs wfull text-sm">
 						<span>Rich Text</span>
 						<span class="text-xs text-muted">for Docs / Notion</span>

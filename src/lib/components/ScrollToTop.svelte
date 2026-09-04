@@ -18,7 +18,7 @@
 </script>
 
 {#if visible && $docStore.renderedHtml}
-  <button class="scroll-top absolute bg border   text-secondary cursor-pointer"
+  <button class="scroll-top absolute bg border text-secondary cursor-pointer"
     onclick={scrollToTop} title="Scroll to top (gg)" aria-label="Scroll to top">
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
       <polyline points="4,10 8,6 12,10" />

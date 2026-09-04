@@ -26,7 +26,7 @@
 </script>
 
 {#if node}
-	<aside class="node-inspector border-left box gap-3xs pad-sm overflow-y-auto" aria-label="Selected node details">
+	<aside class="node-inspector border-left box gap-3xs pad-sm scroll-y" aria-label="Selected node details">
 		<header class="row ycenter xbetween gap-2xs border-bottom pad-bottom-2xs">
 			<div class="box gap-3xs grow min0">
 				<span class="badge">{node.kind ?? 'node'}</span>

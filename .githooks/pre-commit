@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# .githooks/pre-commit
+# Privacy boundary enforcement - refuses commits that leak chat data.
+set -e
+bash "$(git rev-parse --show-toplevel)/scripts/check-privacy.sh" staged

@@ -12,7 +12,7 @@
 		/>
 	</div>
 
-	<div class="day-list box gap-3xs overflow-y-auto">
+	<div class="day-list box gap-3xs scroll-y">
 		{#each logsState.filteredDays as day}
 			<button
 				class="day-card box gap-3xs pad-x-2xs pad-y-3xs text-left cursor-pointer"

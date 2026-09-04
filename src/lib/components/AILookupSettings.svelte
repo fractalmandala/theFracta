@@ -205,14 +205,14 @@
   {#each $aiLookup.providers as p (p.id)}
     {@const expanded = isExpanded(p)}
     {@const isEditingProvider = editingProviderId === p.id}
-    <div class="provider border " class:opacity-half={!expanded}>
+    <div class="provider border" class:opacity-half={!expanded}>
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div class="provider-row row ycenter gap-xs pad-x-xs pad-y-2xs cursor-pointer" onclick={() => toggleProvider(p)}>
         <span class="text-muted shrink-0 icon-chevron-slot" aria-hidden="true">
           {#if expanded}<Icon icon={luChevronDown} size={12} decorative />{:else}<Icon icon={luChevronRight} size={12} decorative />{/if}
         </span>
-        <span class="provider-favicon  overflow-hidden">
+        <span class="provider-favicon overflow-hidden">
           {#if faviconErrored.has(p.id) || !faviconUrl(p)}
             <span class="text-xs weight-600 text-secondary">{p.name.charAt(0).toUpperCase()}</span>
           {:else}
@@ -221,7 +221,7 @@
         </span>
         <span class="text-sm weight-500 grow min0 truncate">{p.name}</span>
         {#if p.prompts.length > 0}
-          <span class="text-xs text-muted tabular-nums pad-x-2xs pad-y-3xs  surface">{p.prompts.length}</span>
+          <span class="text-xs text-muted tabular-nums pad-x-2xs pad-y-3xs surface">{p.prompts.length}</span>
         {/if}
         <div class="provider-actions row gap-3xs shrink-0">
           <button class="button is-icon text-muted" title="Edit provider" aria-label="Edit provider" onclick={(e) => { e.stopPropagation(); startEditProvider(p); }}>
@@ -251,7 +251,7 @@
           {#each p.prompts as pr (pr.id)}
             {@const isEditingThisPrompt = editingPromptKey === `${p.id}:${pr.id}`}
             {#if isEditingThisPrompt}
-              <div class="edit-form box gap-2xs pad-xs surface border-top border  m-y-3xs">
+              <div class="edit-form box gap-2xs pad-xs surface border-top border m-y-3xs">
                 <input class="input text-xs wfull" bind:value={prName} placeholder="Prompt name" />
                 <textarea class="input text-xs mono wfull" bind:value={prTemplate} rows="2" placeholder={'Template — use {selection} where the text goes'}></textarea>
                 {#if prError}<div class="text-xs text-danger">{prError}</div>{/if}
@@ -262,7 +262,7 @@
                 </div>
               </div>
             {:else}
-              <div class="prompt-row row ycenter gap-2xs pad-x-2xs pad-y-3xs " title={pr.template}>
+              <div class="prompt-row row ycenter gap-2xs pad-x-2xs pad-y-3xs" title={pr.template}>
                 <span class="text-xs grow min0 truncate">{pr.name}</span>
                 <div class="prompt-actions row gap-3xs shrink-0">
                   <button class="button is-icon text-muted" title="Edit prompt" aria-label="Edit prompt" onclick={() => startEditPrompt(p.id, pr)}>
@@ -277,7 +277,7 @@
           {/each}
 
           {#if addingPromptFor === p.id}
-            <div class="edit-form box gap-2xs pad-xs surface border ">
+            <div class="edit-form box gap-2xs pad-xs surface border">
               <input class="input text-xs wfull" bind:value={prName} placeholder="Prompt name" />
               <textarea class="input text-xs mono wfull" bind:value={prTemplate} rows="2" placeholder={'Template — use {selection} where the text goes'}></textarea>
               {#if prError}<div class="text-xs text-danger">{prError}</div>{/if}
@@ -296,7 +296,7 @@
   {/each}
 
   {#if addingProviderOpen}
-    <div class="edit-form box gap-2xs pad-xs surface border  m-top-2xs">
+    <div class="edit-form box gap-2xs pad-xs surface border m-top-2xs">
       <input class="input text-xs wfull" bind:value={pName} placeholder="Provider name" />
       <input class="input text-xs mono wfull" bind:value={pUrl} placeholder="https://example.com/?q={prompt}" />
       {#if pError}<div class="text-xs text-danger">{pError}</div>{/if}

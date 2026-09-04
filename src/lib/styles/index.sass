@@ -1,9 +1,5 @@
-@forward '00_tokens'
-@use '01_config' as *
-@use '02_dimensions' as *
-@use '03_containers' as *
-@use '04_layouts' as *
-@use '05_shells' as *
-@use '06_visuals' as *
-@use '07_interactions' as *
+// Fracta's stylesheet = the fractalstyler2 0.8.0 contract, then Fracta's own
+// layer. The contract is consumed from the package (vite loadPaths includes
+// node_modules) rather than vendored, so upstream fixes arrive with `pnpm up`.
+@use 'fractalstyler2/styles' as *
 @use '08_own' as *

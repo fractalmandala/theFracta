@@ -27,7 +27,7 @@
 	import { getCurrentWindow } from "@tauri-apps/api/window";
 	import { invoke } from "@tauri-apps/api/core";
 	import { tocVisible, tocEntries } from "$lib/stores/toc";
-	import Toolbar from "$lib/components/Toolbar.svelte";
+	import { notesState } from "$lib/states/notesState.svelte";
 	import MarkdownRenderer from "$lib/components/MarkdownRenderer.svelte";
 	import DropZone from "$lib/components/DropZone.svelte";
 	import EmptyState from "$lib/components/EmptyState.svelte";
@@ -1150,52 +1150,56 @@
 			startFileWatcher(path);
 		}
 	});
+
+	$effect(() => {
+		notesState.onSaveCallback = () => {
+			if (activeTab) void handleSave(activeTab);
+		};
+		notesState.onSetModeCallback = setMode;
+		notesState.onRawToggleCallback = handleRawToggle;
+		notesState.onTogglePresentCallback = togglePresent;
+	});
+
+	$effect(() => {
+		notesState.rawMode = rawMode;
+	});
+
+	$effect(() => {
+		notesState.splitMode = splitMode;
+	});
+
+	$effect(() => {
+		notesState.presenting = presenting;
+	});
 </script>
+
 <div class="page-split wfull">
 	<aside class="page-sidebar">
-		<KnowledgeLibrary
-			onOpen={() => (openVisible = true)}
-			onPaste={() => { pasteDefaultMode = "paste"; pasteVisible = true; }}
-			onUrl={() => { pasteDefaultMode = "url"; pasteVisible = true; }}
-		/>
+		<KnowledgeLibrary/>
 	</aside>
 
 	<section class="page-main">
 		{#if !zenMode}
 			<ProgressBar />
-			<Toolbar
-				onOpen={() => (openVisible = true)}
-				onPaste={() => { pasteDefaultMode = "paste"; pasteVisible = true; }}
-				onUrl={() => { pasteDefaultMode = "url"; pasteVisible = true; }}
-				{rawMode}
-				onRawToggle={handleRawToggle}
-				isEditing={activeTab?.isEditing ?? false}
-				dirty={activeTab?.dirty ?? false}
-				canEdit={canEditActive}
-				editMode={activeEditMode}
-				onSetMode={setMode}
-				onSave={() => activeTab && handleSave(activeTab)}
-				onOpenSettings={() => (settingsVisible = true)}
-				canPresent={activeIsMarp}
-				{presenting}
-				onTogglePresent={togglePresent}
-			/>
 			<TabBar onCloseTab={handleCloseTab} />
 		{/if}
 
 		<DropZone />
 
-		{#if !zenMode && !activeTab?.isEditing}
-			<TableOfContents />
-		{/if}
 
 		<SearchOverlay bind:visible={searchVisible} />
 		<PasteModal bind:visible={pasteVisible} defaultMode={pasteDefaultMode} />
 		<OpenDialog bind:visible={openVisible} />
-		<SettingsDialog bind:visible={settingsVisible} />
+		<SettingsDialog bind:visible={notesState.settingsVisible} />
 		<AboutDialog bind:visible={aboutVisible} />
 		<CustomPromptModal bind:visible={customPromptVisible} selection={customPromptSelection} />
 
+			<!--
+			  Content and its table of contents are siblings in a row. The TOC used to
+			  be a fixed overlay that content had to dodge with .toc-spaced; it is a
+			  real rail now, so nothing needs pushing out of its way.
+			-->
+			<div class="row grow min0">
 		{#if !rendererReady}
 			<div class="box ycenter xcenter gap-sm pad-lg">
 				<p class="text-muted">Loading renderer…</p>
@@ -1259,13 +1263,13 @@
 					/>
 				</div>
 			{:else if rawMode}
-				<main class="content-main" class:toc-spaced={$tocVisible && $tocEntries.length > 0}>
+				<main class="content-main">
 					<pre class="raw-source"
 						style="--raw-font-size: {$settings.fontSize}px; --raw-line-height: {$settings.lineHeight}; --raw-max-width: {contentMaxWidth};"
 					><code>{$docStore.content}</code></pre>
 				</main>
 			{:else}
-				<main class="content-main" class:toc-spaced={$tocVisible && $tocEntries.length > 0}>
+				<main class="content-main">
 					<FrontmatterBar />
 					<MarkdownRenderer
 						html={$docStore.renderedHtml}
@@ -1295,6 +1299,13 @@
 				onOpenUrl={() => { pasteDefaultMode = "url"; pasteVisible = true; }}
 			/>
 		{/if}
+
+			{#if !zenMode && !activeTab?.isEditing}
+				<aside class="sidebar-right toc-sidebar" aria-label="On this page">
+					<TableOfContents />
+				</aside>
+			{/if}
+			</div>
 
 		<Toast />
 	</section>

@@ -65,7 +65,7 @@
 
 	<div class="cal-weekdays row text-3xs text-muted">
 		{#each ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as w}
-			<span class="grow min0 text-center">{w}</span>
+			<span class="grow min0 tt-c">{w}</span>
 		{/each}
 	</div>
 

@@ -7,16 +7,6 @@
 	import { pinnedFolders } from '$lib/stores/pinned';
 	import { recentFiles, removeRecentFile } from '$lib/stores/recents';
 
-	let {
-		onPaste = () => {},
-		onOpen = () => {},
-		onUrl = () => {}
-	}: {
-		onPaste?: () => void;
-		onOpen?: () => void;
-		onUrl?: () => void;
-	} = $props();
-
 	interface MdFile {
 		name: string;
 		path: string;
@@ -87,34 +77,23 @@
 	}
 </script>
 
-<aside class="sidebar-left box gap-2xs" aria-label="Notes library">
+<aside class="box gap-2xs" aria-label="Notes library">
 	<!-- Quick entry actions -->
-	<div class="box gap-3xs pad-x-xs pad-top-2xs pad-bottom-xs">
-		<div class="row gap-3xs">
-			<button class="button small ghost text-xs" onclick={onOpen}>Open</button>
-			<button class="button small ghost text-xs" onclick={onPaste}>Paste</button>
-			<button class="button small ghost text-xs" onclick={onUrl}>URL</button>
-		</div>
-	</div>
-
 	<!-- Pinned folders -->
-	<section class="box gap-2xs pad-x-xs pad-bottom-sm" aria-labelledby="pinned-folders-heading">
-		<header class="row ycenter xbetween pad-x-2xs pad-y-2xs">
-			<h2 id="pinned-folders-heading" class="text-xs weight-600 tt-u text-muted m-0">Pinned folders</h2>
+	<section class="box gap-2xs" aria-labelledby="pinned-folders-heading">
+		<header class="row ycenter xbetween pad-3xs">
+			<h2 class="text-xs weight-400 tt-u text-muted">Pinned</h2>
 			<button class="library-icon-btn is-icon" onclick={addPinnedFolder} title="Pin folder" aria-label="Pin folder">
 				<Icon icon={luPin} size={14} />
 			</button>
 		</header>
-
-		{#if $pinnedFolders.length === 0}
-			<p class="text-xs text-muted pad-x-2xs m-0">Pin a folder to keep its recent Markdown files within reach.</p>
-		{:else}
-			<ul class="box gap-3xs reset-list">
+		{#if $pinnedFolders.length !== 0}
+			<div class="box gap-3xs reset-list">
 				{#each $pinnedFolders as folder (folder)}
-					<li class="box gap-3xs">
-						<div class="row ycenter gap-3xs">
+					<div class="box gap-3xs">
+						<div class="row ycenter gap-3xs wfull">
 							<button class="library-row-btn row ycenter gap-2xs grow min0" onclick={() => toggleFolder(folder)} aria-expanded={expandedFolders.has(folder)}>
-								<Icon icon={luFolderOpen} size={15} class="shrink-0" />
+								<Icon icon={luFolderOpen} size={15}/>
 								<span class="text-sm weight-500 truncate grow min0">{folderName(folder)}</span>
 								<span class="text-xs text-muted tabular-nums">{folderFiles[folder]?.length ?? '…'}</span>
 							</button>
@@ -140,31 +119,27 @@
 								{/if}
 							</ul>
 						{/if}
-					</li>
+					</div>
 				{/each}
-			</ul>
+			</div>
 		{/if}
 	</section>
 
 	<!-- Recent files -->
-	<section class="box gap-2xs pad-x-xs pad-bottom-sm" aria-labelledby="recent-notes-heading">
-		<header class="row ycenter xbetween pad-x-2xs pad-y-2xs">
-			<h2 id="recent-notes-heading" class="text-xs weight-600 tt-u text-muted m-0">Recent</h2>
-			<span class="text-xs text-muted tabular-nums">{$recentFiles.length}</span>
+	<section class="box gap-2xs" aria-labelledby="recent-notes-heading">
+		<header class="row ycenter xbetween pad-3xs">
+			<h2 class="text-xs weight-400 tt-u text-muted">Recent</h2>
 		</header>
-		{#if $recentFiles.length === 0}
-			<p class="text-xs text-muted pad-x-2xs m-0">Notes you open will appear here.</p>
-		{:else}
-			<ul class="box gap-3xs reset-list">
+		{#if $recentFiles.length !== 0}
+			<ul class="box gap-3xs reset-list pad-3xs">
 				{#each $recentFiles as file (file.path)}
 					<li class="row ycenter gap-3xs">
-						<button class="library-row-btn row ycenter gap-2xs grow min0" onclick={() => void openFile(file.path)} title={file.path}>
-							<Icon icon={luBookOpen} size={14} class="shrink-0" />
-							<span class="box gap-3xs grow min0">
-								<span class="text-sm weight-500 truncate">{file.name}</span>
+						<div class="border-bottom">
+							<button class="box xleft pad-2xs blank gap-3xs ytop" onclick={() => void openFile(file.path)} title={file.path}>
+								<p class="text-xs text-secondary">{file.name}</p>
 								<small class="text-xs text-muted">{relativeTime(file.openedAt)} ago</small>
-							</span>
 						</button>
+						</div>
 						<button class="library-row-remove is-icon" onclick={() => removeRecentFile(file.path)} aria-label={`Remove ${file.name} from recents`} title="Remove from recents">
 							<Icon icon={luX} size={13} />
 						</button>

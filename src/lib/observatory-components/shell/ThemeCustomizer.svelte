@@ -56,7 +56,7 @@
 				<button class="button is-icon text-muted" onclick={() => themeState.toggleCustomizer()} aria-label="Close theme customizer">✕</button>
 			</header>
 
-			<div class="dialog-body box gap-md pad-x-sm pad-y-sm overflow-y-auto">
+			<div class="dialog-body box gap-md pad-x-sm pad-y-sm scroll-y">
 				<!-- Presets -->
 				<section class="box gap-2xs">
 					<span class="text-xs tt-u weight-600 text-muted">Background Presets</span>

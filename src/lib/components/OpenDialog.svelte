@@ -194,7 +194,7 @@
 {#if visible}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="dialog-backdrop fixed inset-0 box ycenter xcenter pad-y-md" onclick={handleBackdropClick} onkeydown={handleKeydown}>
-    <div class="dialog-card card  bg-dialog border  box dialog-h-screen dialog-lg">
+    <div class="dialog-card card bg-dialog border box dialog-h-screen dialog-lg">
 
       <header class="dialog-header row ycenter xbetween pad-x-sm pad-y-xs border-bottom">
         <h2 class="text-md weight-600 m-0">Open</h2>
@@ -205,7 +205,7 @@
 
       <!-- Quick entry -->
       <div class="box gap-2xs pad-x-sm pad-y-sm border-bottom">
-        <button onclick={handleOpenSystem} class="browse-btn row ycenter gap-2xs wfull surface border  pad-x-xs pad-y-2xs text-sm text-primary text-left cursor-pointer">
+        <button onclick={handleOpenSystem} class="browse-btn row ycenter gap-2xs wfull surface border pad-x-xs pad-y-2xs text-sm text-primary text-left cursor-pointer">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" class="shrink-0">
             <path d="M2 5l4-3h8v11H2V5z"/><line x1="2" y1="5" x2="6" y2="5"/>
           </svg>
@@ -222,7 +222,7 @@
           </button>
         </div>
         {#if urlError}
-          <div class="text-xs text-danger pad-x-xs pad-y-2xs  bg-danger-soft">{urlError}</div>
+          <div class="text-xs text-danger pad-x-xs pad-y-2xs bg-danger-soft">{urlError}</div>
         {/if}
       </div>
 
@@ -240,14 +240,14 @@
       </nav>
 
       <!-- Content -->
-      <div class="dialog-content box gap-3xs pad-x-xs pad-y-xs grow min0 overflow-y-auto dialog-content-flex">
+      <div class="dialog-content box gap-3xs pad-x-xs pad-y-xs grow min0 scroll-y dialog-content-flex">
 
         {#if activeTab === "recent"}
           {#if $recentFiles.length === 0}
             <div class="empty-list box ycenter xcenter gap-2xs pad-y-xl text-muted text-sm">No recent files</div>
           {:else}
             {#each $recentFiles as file (file.path)}
-              <button class="file-item row ycenter gap-xs wfull pad-x-sm pad-y-2xs  text-left cursor-pointer" onclick={() => handleOpenFile(file.path)}>
+              <button class="file-item row ycenter gap-xs wfull pad-x-sm pad-y-2xs text-left cursor-pointer" onclick={() => handleOpenFile(file.path)}>
                 <span class="file-icon shrink-0 text-muted" aria-hidden="true">
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><rect x="2" y="1" width="10" height="12" rx="1.5"/><line x1="4.5" y1="4" x2="9.5" y2="4"/><line x1="4.5" y1="6.5" x2="8" y2="6.5"/><line x1="4.5" y1="9" x2="9" y2="9"/></svg>
                 </span>
@@ -272,7 +272,7 @@
           {:else}
             {#each $pinnedFolders as folder (folder)}
               <div class="box gap-3xs">
-                <button class="folder-header row ycenter gap-2xs wfull pad-x-sm pad-y-2xs  text-sm text-primary text-left cursor-pointer" onclick={() => toggleDialogFolder(folder)}>
+                <button class="folder-header row ycenter gap-2xs wfull pad-x-sm pad-y-2xs text-sm text-primary text-left cursor-pointer" onclick={() => toggleDialogFolder(folder)}>
                   <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" class="folder-chevron shrink-0 text-muted" class:folder-chevron-open={expandedDialogFolders.has(folder)} aria-hidden="true">
                     <path d="M3 1l4 4-4 4"/>
                   </svg>
@@ -286,7 +286,7 @@
                 {#if expandedDialogFolders.has(folder)}
                   {#if folderFiles[folder]}
                     {#each folderFiles[folder] as file (file.path)}
-                      <button class="file-item file-item-nested row ycenter gap-xs wfull pad-x-sm pad-y-2xs  text-left cursor-pointer" onclick={() => handleOpenFile(file.path)}>
+                      <button class="file-item file-item-nested row ycenter gap-xs wfull pad-x-sm pad-y-2xs text-left cursor-pointer" onclick={() => handleOpenFile(file.path)}>
                         <span class="file-icon shrink-0 text-muted" aria-hidden="true">
                           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><rect x="2" y="1" width="10" height="12" rx="1.5"/><line x1="4.5" y1="4" x2="9.5" y2="4"/><line x1="4.5" y1="6.5" x2="8" y2="6.5"/><line x1="4.5" y1="9" x2="9" y2="9"/></svg>
                         </span>
@@ -315,13 +315,13 @@
           {#if plansLoading}
             <div class="empty-list box ycenter xcenter pad-y-xl text-muted text-sm">Loading plans…</div>
           {:else if plans.length === 0}
-            <div class="empty-list box ycenter xcenter gap-3xs pad-y-xl text-center">
+            <div class="empty-list box ycenter xcenter gap-3xs pad-y-xl tt-c">
               <p class="text-muted text-sm m-0">No Claude Code plans found</p>
               <span class="text-xs text-muted">Plans are stored in ~/.claude/plans/</span>
             </div>
           {:else}
             {#each plans as plan (plan.path)}
-              <button class="file-item row ycenter gap-xs wfull pad-x-sm pad-y-2xs  text-left cursor-pointer" onclick={() => handleOpenFile(plan.path)}>
+              <button class="file-item row ycenter gap-xs wfull pad-x-sm pad-y-2xs text-left cursor-pointer" onclick={() => handleOpenFile(plan.path)}>
                 <span class="file-icon shrink-0 text-muted" aria-hidden="true">
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><rect x="2" y="1" width="10" height="12" rx="1.5"/><polyline points="5,5 6.5,6.5 9,4"/><line x1="4.5" y1="8.5" x2="9.5" y2="8.5"/><line x1="4.5" y1="10.5" x2="8" y2="10.5"/></svg>
                 </span>

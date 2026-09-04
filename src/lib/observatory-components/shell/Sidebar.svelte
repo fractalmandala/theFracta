@@ -15,7 +15,7 @@
 	];
 </script>
 
-<aside class="observatory-sidebar border-right box gap-sm pad-sm overflow-y-auto">
+<aside class="observatory-sidebar border-right box gap-sm pad-sm scroll-y">
 	<!-- Project meta -->
 	<header class="box gap-3xs border-bottom pad-bottom-2xs">
 		<h2 class="text-md weight-700 m-0">{scan?.project?.name ?? projectsState.activeProject?.name ?? 'Project'}</h2>

@@ -1,7 +1,7 @@
 // src/lib/app-state.svelte.ts
-export type AppView = 'notes' | 'bench' | 'agents' | 'canvas';
+export type AppView = 'notes' | 'bench' | 'agents' | 'canvas' | 'wiki';
 
-const VALID_VIEWS: AppView[] = ['notes', 'bench', 'agents', 'canvas'];
+const VALID_VIEWS: AppView[] = ['notes', 'bench', 'agents', 'canvas', 'wiki'];
 const STORAGE_KEY = 'active_app_view';
 
 function getInitialView(): AppView {

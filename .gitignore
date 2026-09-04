@@ -11,3 +11,20 @@ coverage/
 .env.*
 !.env.example
 src-tauri/binaries/
+
+# === Wiki privacy boundary - never commit corpus or machine-local data ===
+# See docs/wiki-privacy.md
+# ~/.fracta/ is never inside the working tree, but guard against accidents:
+/.fracta/
+.fracta
+# Any file containing the corpus identifier (ingest marker)
+*.corpus.jsonl
+*.snippets.txt
+# Local-only caches and indexes (defense in depth)
+/.cache/
+.wiki-index.sqlite
+.wiki-index.sqlite-journal
+.wiki-index.sqlite-wal
+# Any accidental corpus export
+chat-corpus/
+wiki-corpus/

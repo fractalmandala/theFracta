@@ -80,7 +80,7 @@
 {#if visible}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="dialog-backdrop fixed inset-0 box ycenter xcenter pad-top-2xl" onclick={handleBackdropClick} onkeydown={handleKeydown}>
-    <div class="dialog-card card  bg-dialog border  box dialog-h-screen dialog-md">
+    <div class="dialog-card card bg-dialog border box dialog-h-screen dialog-md">
       <header class="dialog-header row ycenter xbetween pad-x-sm pad-y-xs border-bottom">
         <h2 class="text-md weight-600 m-0">Custom AI Prompt</h2>
         <button onclick={() => (visible = false)} class="button is-icon text-muted" aria-label="Close">
@@ -90,11 +90,11 @@
         </button>
       </header>
 
-      <div class="dialog-body box gap-sm pad-x-sm pad-y-sm overflow-y-auto">
+      <div class="dialog-body box gap-sm pad-x-sm pad-y-sm scroll-y">
         {#if hasSelection}
           <div class="field box gap-3xs">
             <div class="field-label text-xs weight-500 text-secondary">Selected text</div>
-            <div class="selection-box surface border  pad-x-xs pad-y-2xs text-sm text-primary">{selection}</div>
+            <div class="selection-box surface border pad-x-xs pad-y-2xs text-sm text-primary">{selection}</div>
           </div>
         {:else}
           <p class="text-xs text-muted m-0 pad-y-3xs">No selection — your prompt will be sent as-is.</p>
@@ -124,7 +124,7 @@
         </div>
 
         {#if error}
-          <div class="field-error-row text-xs text-danger pad-x-2xs pad-y-3xs ">{error}</div>
+          <div class="field-error-row text-xs text-danger pad-x-2xs pad-y-3xs">{error}</div>
         {/if}
       </div>
 

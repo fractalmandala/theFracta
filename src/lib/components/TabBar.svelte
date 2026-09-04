@@ -173,7 +173,7 @@
 {#if contextMenuTab}
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div class="scrim fixed inset-0 scrim-raised" onclick={closeContextMenu} onkeydown={() => {}}></div>
-	<div class="dropdown popover-shadow fixed bg border  pad-3xs" style="--dropdown-x: {contextMenuPos.x}px; --dropdown-y: {contextMenuPos.y}px;">
+	<div class="dropdown popover-shadow fixed bg border pad-3xs" style="--dropdown-x: {contextMenuPos.x}px; --dropdown-y: {contextMenuPos.y}px;">
 		<button onclick={handleCopyPath} class="dropdown-item row ycenter gap-2xs wfull text-sm text-left">
 			<span class="truncate">{copyFeedback || "Copy Path"}</span>
 		</button>

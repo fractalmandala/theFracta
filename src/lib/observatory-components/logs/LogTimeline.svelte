@@ -84,7 +84,7 @@
 	});
 </script>
 
-<div class="timeline-shell box gap-md pad-md grow min0 overflow-y-auto">
+<div class="timeline-shell box gap-md pad-md grow min0 scroll-y">
 	{#if log}
 		<!-- Hero -->
 		<header class="box gap-3xs border-bottom pad-bottom-3xs">
@@ -154,7 +154,7 @@
 		<!-- Stream -->
 		<div class="box gap-2xs">
 			{#if timelineItems.length === 0}
-				<p class="text-sm text-muted text-center pad-md">No entries match the selected filter.</p>
+				<p class="text-sm text-muted tt-c pad-md">No entries match the selected filter.</p>
 			{:else}
 				{#each timelineItems as item}
 					<div

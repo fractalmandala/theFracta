@@ -73,13 +73,13 @@
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="3" y1="3" x2="13" y2="13"/><line x1="13" y1="3" x2="3" y2="13"/></svg>
   </button>
 
-  <button class="present-nav absolute is-icon  text-muted cursor-pointer shrink-0" onclick={() => go(-1)} disabled={current === 0} aria-label="Previous slide">
+  <button class="present-nav absolute is-icon text-muted cursor-pointer shrink-0" onclick={() => go(-1)} disabled={current === 0} aria-label="Previous slide">
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="15,4 7,12 15,20"/></svg>
   </button>
 
   <div class="present-stage frame-16-9 bg overflow-hidden box grow">
     {#key current}
-      <div class="present-slide grow min0 overflow-y-auto">
+      <div class="present-slide grow min0 scroll-y">
         <MarkdownRenderer html={slideHtmls[current] ?? ""} {onLocalLink} />
       </div>
     {/key}
@@ -88,7 +88,7 @@
     {/if}
   </div>
 
-  <button class="present-nav absolute is-icon  text-muted cursor-pointer shrink-0" onclick={() => go(1)} disabled={current >= total - 1} aria-label="Next slide">
+  <button class="present-nav absolute is-icon text-muted cursor-pointer shrink-0" onclick={() => go(1)} disabled={current >= total - 1} aria-label="Next slide">
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9,4 17,12 9,20"/></svg>
   </button>
 </div>

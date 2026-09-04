@@ -1,6 +1,6 @@
 {
   "name": "fracta",
-  "description": "Fracta — one desktop window with Knowledge and Observatory modes",
+  "description": "Fracta \u2014 one desktop window with Knowledge and Observatory modes",
   "private": true,
   "packageManager": "pnpm@10.33.2",
   "engines": {
@@ -10,13 +10,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build",
+    "build": "npm run check:classes && vite build",
     "preview": "vite preview",
-    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json && npm run check:classes",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "test": "svelte-kit sync && vitest run",
     "tauri": "tauri",
-    "sidecar": "cd services/fractorches && go build -o ../../src-tauri/binaries/fractorches ./cmd/agentsview"
+    "sidecar": "cd services/fractorches && go build -o ../../src-tauri/binaries/fractorches ./cmd/agentsview",
+    "check:privacy": "bash scripts/check-privacy.sh full",
+    "check:privacy:staged": "bash scripts/check-privacy.sh staged",
+    "check:classes": "node scripts/check-classes.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
@@ -48,8 +51,7 @@
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^26.4.0",
     "autoprefixer": "^10.4.27",
-    "fractalstyler2": "^0.4.1",
-    "fractalthemer": "^0.5.0",
+    "fractalstyler2": "^0.8.0",
     "postcss": "^8.5.8",
     "prettier": "3.9.6",
     "sass": "^1.103.1",

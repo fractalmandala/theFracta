@@ -4,12 +4,12 @@
   let { visible = false }: { visible: boolean } = $props();
 </script>
 {#if visible}
-  <div class="rc-panel fixed bg border   pad-xs">
+  <div class="rc-panel fixed bg border pad-xs">
     <h3 class="text-xs weight-600 tt-u text-muted m-0 pad-bottom-xs">Reading preferences</h3>
 
     <div class="box gap-2xs pad-bottom-xs">
       <span class="text-sm text-secondary">Font</span>
-      <div class="rc-segmented row gap-3xs raised  pad-3xs">
+      <div class="rc-segmented row gap-3xs raised pad-3xs">
         {#each ["sans", "serif", "mono"] as font}
           <button onclick={() => settings.update((s) => ({ ...s, fontFamily: font as "sans" | "serif" | "mono" }))}
             class="rc-seg-btn grow min0" class:rc-seg-active={$settings.fontFamily === font}>
@@ -41,7 +41,7 @@
 
     <div class="box gap-2xs pad-bottom-xs">
       <span class="text-sm text-secondary">Width mode</span>
-      <div class="rc-segmented row gap-3xs raised  pad-3xs">
+      <div class="rc-segmented row gap-3xs raised pad-3xs">
         <button onclick={() => settings.update((s) => ({ ...s, widthMode: "comfortable" }))}
           class="rc-seg-btn grow min0" class:rc-seg-active={$settings.widthMode === "comfortable"}>Comfortable</button>
         <button onclick={() => settings.update((s) => ({ ...s, widthMode: "wide" }))}

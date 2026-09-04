@@ -11,7 +11,7 @@
 
 <!-- Page type: logs browser with persistent left sidebar (calendar + day list) and main timeline. -->
 <div class="logs-page row grow min0 wfull">
-	<aside class="logs-sidebar border-right box gap-sm pad-sm overflow-y-auto">
+	<aside class="logs-sidebar border-right box gap-sm pad-sm scroll-y">
 		<LogCalendar />
 		<DayList />
 	</aside>

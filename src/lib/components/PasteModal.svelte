@@ -149,11 +149,11 @@
 {#if visible}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="dialog-backdrop fixed inset-0 box ycenter xcenter pad-y-md" onkeydown={handleKeydown} onclick={handleBackdropClick}>
-    <div class="dialog-card card  bg-dialog border  box dialog-h-screen dialog-xl">
+    <div class="dialog-card card bg-dialog border box dialog-h-screen dialog-xl">
 
       <header class="dialog-header row ycenter xbetween pad-x-sm pad-y-xs border-bottom">
         <div class="row ycenter gap-2xs">
-          <div class="mode-tabs row gap-3xs surface  pad-3xs">
+          <div class="mode-tabs row gap-3xs surface pad-3xs">
             <button class="mode-tab" class:mode-tab-active={mode === "paste"} onclick={() => (mode = "paste")}>Paste</button>
             <button class="mode-tab" class:mode-tab-active={mode === "url"} onclick={() => (mode = "url")}>Open URL</button>
           </div>
@@ -200,9 +200,9 @@
             </button>
           </div>
           {#if urlError}
-            <div class="text-xs text-danger pad-x-xs pad-y-2xs  bg-danger-soft">{urlError}</div>
+            <div class="text-xs text-danger pad-x-xs pad-y-2xs bg-danger-soft">{urlError}</div>
           {/if}
-          <div class="url-hints surface  pad-xs box gap-3xs text-xs text-secondary">
+          <div class="url-hints surface pad-xs box gap-3xs text-xs text-secondary">
             <p class="text-xs weight-600 tt-u text-muted m-0 pad-bottom-3xs">Supported URLs</p>
             <ul class="box gap-3xs reset-list-pad-md list-disc">
               <li>GitHub — <code class="kbd text-3xs">github.com/user/repo/blob/main/file.md</code></li>

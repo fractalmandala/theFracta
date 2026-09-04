@@ -21,7 +21,7 @@
 {#if visible}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="dialog-backdrop fixed inset-0 box ycenter xcenter pad-top-2xl" onclick={handleBackdropClick} onkeydown={handleKeydown}>
-    <div class="dialog-card card  bg-dialog border  box dialog-md" role="dialog" aria-modal="true" aria-labelledby="knowledge-settings-title">
+    <div class="dialog-card card bg-dialog border box dialog-md" role="dialog" aria-modal="true" aria-labelledby="knowledge-settings-title">
       <header class="dialog-header row ycenter xbetween pad-x-sm pad-y-xs border-bottom">
         <h2 id="knowledge-settings-title" class="text-md weight-600 m-0">Settings</h2>
         <button onclick={() => (visible = false)} class="button is-icon text-muted" aria-label="Close settings">
@@ -29,7 +29,7 @@
         </button>
       </header>
 
-      <div class="dialog-body box gap-sm pad-x-sm pad-y-md overflow-y-auto dialog-h-fit">
+      <div class="dialog-body box gap-sm pad-x-sm pad-y-md scroll-y dialog-h-fit">
         <section class="settings-section box gap-2xs pad-y-xs">
           <h3 class="text-xs weight-600 tt-u text-muted m-0 pad-y-2xs">Behavior</h3>
 

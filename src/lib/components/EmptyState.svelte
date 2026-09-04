@@ -110,7 +110,7 @@
 
 	<!-- Hero -->
 	<header class="empty-hero row ycenter gap-xs pad-bottom-2xs">
-		<span class="empty-hero-icon  box ycenter xcenter icon-44">
+		<span class="empty-hero-icon box ycenter xcenter icon-44">
 			<Icon icon={luBookOpen} size={44} title="Fracta Knowledge" />
 		</span>
 		<div class="box gap-3xs">
@@ -149,7 +149,7 @@
 						<h2 class="text-xs weight-600 tt-u text-muted m-0">Recent Files</h2>
 						<button class="text-xs text-muted cursor-pointer bg-transparent border-0" onclick={() => { clearRecentFiles(); }}>Clear</button>
 					</header>
-					<div class="card border ">
+					<div class="card border">
 						<div class="empty-card-scroll box">
 							{#each $recentFiles as file (file.path)}
 								<button class="empty-item row ycenter gap-xs wfull pad-x-xs pad-y-2xs text-left border-bottom cursor-pointer"
@@ -181,7 +181,7 @@
 							<svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg>
 						</button>
 					</header>
-					<div class="card border ">
+					<div class="card border">
 						<div class="empty-card-scroll box">
 							{#each plans as plan (plan.path)}
 								<button class="empty-item row ycenter gap-xs wfull pad-x-xs pad-y-2xs text-left border-bottom cursor-pointer" onclick={() => openFile(plan.path)}>
@@ -212,12 +212,12 @@
 							<svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg>
 						</button>
 					</header>
-					<div class="card border ">
+					<div class="card border">
 						<div class="empty-card-scroll box">
 							{#if !folderFiles[folder]}
-								<div class="card-empty pad-sm text-xs text-muted text-center">Loading…</div>
+								<div class="card-empty pad-sm text-xs text-muted tt-c">Loading…</div>
 							{:else if folderFiles[folder].length === 0}
-								<div class="card-empty pad-sm text-xs text-muted text-center">No markdown files</div>
+								<div class="card-empty pad-sm text-xs text-muted tt-c">No markdown files</div>
 							{:else}
 								{#each folderFiles[folder] as file (file.path)}
 									<button class="empty-item row ycenter gap-xs wfull pad-x-xs pad-y-2xs text-left border-bottom cursor-pointer" onclick={() => openFile(file.path)}>

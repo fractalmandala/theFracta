@@ -19,34 +19,50 @@
 	import ModelBreakdownTable from './ModelBreakdownTable.svelte';
 
 	onMount(() => observatory.load());
+
+	// A session is read alongside its list; every other tab is a dashboard and
+	// gets the full width.
+	const showSessionList = $derived(
+		observatory.activeTab === 'sessions' || Boolean(observatory.selectedSessionId)
+	);
 </script>
 
 <!--
-  Page type: observatory with optional session sidebar.
-  Shell canon: .page-split when sidebar visible, otherwise a padded .page-shell main.
-  All primitives from fractalstyler2 (.box, .row, .card, .field, .input, .select,
-  .button, .badge, .text-*, .pad-*, .gap-*, .surface, .panel, .border, .shadow-*).
+  Page type: observatory — a dashboard surface.
+  Shell canon: NOT .page-split. There is no permanent sidebar to split to; the
+  filters are toolbar buttons and the session list only appears on the tabs
+  that read one. The layout is header / canvas / footer in a full-bleed column.
 -->
-<div class="page-shell wfull box">
+<div class="box grow min0 hfull">
 	<ObservatoryHeader />
 
 	{#if observatory.loading}
-		<div class="box ycenter xcenter gap-sm pad-2xl">
+		<div class="box grow ycenter xcenter gap-sm pad-2xl">
 			<div class="spinner" aria-hidden="true"></div>
 			<span class="text-muted">Ingesting agent sessions…</span>
 		</div>
-	{:else if observatory.error}
-		<div class="box ycenter xcenter gap-sm pad-2xl">
-			<span class="text-danger">⚠ {observatory.error}</span>
-			<button class="button primary" onclick={() => observatory.load()}>Retry</button>
-		</div>
 	{:else}
-		<div class="observatory-body row grow min0">
-			{#if observatory.activeTab === 'sessions' || observatory.selectedSessionId}
+		<div class="row grow min0">
+			{#if showSessionList}
 				<SessionSidebar />
 			{/if}
 
-			<main class="observatory-main grow min0">
+			<main class="observatory-canvas">
+				{#if observatory.error}
+					<!--
+					  A failing endpoint is a notice inside the canvas, not a
+					  replacement for the whole screen: whatever else loaded stays
+					  readable underneath it.
+					-->
+					<div class="card border error-card row ycenter gap-sm pad-sm" role="alert">
+						<div class="box gap-3xs grow min0">
+							<span class="text-sm weight-600">Session index unavailable</span>
+							<span class="text-xs mono text-muted">{observatory.error}</span>
+						</div>
+						<button class="button small ghost" onclick={() => observatory.load()}>Retry</button>
+					</div>
+				{/if}
+
 				{#if observatory.selectedSessionId}
 					<TranscriptViewer />
 				{:else if observatory.activeTab === 'sessions'}
@@ -74,7 +90,6 @@
 
 			<SessionFilterPanel />
 		</div>
-
 		<StatusFooter />
 	{/if}
 </div>

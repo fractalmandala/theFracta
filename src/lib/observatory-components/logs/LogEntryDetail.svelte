@@ -24,7 +24,7 @@
 				<button class="button is-icon text-muted" onclick={() => logsState.closeModal()} aria-label="Close entry details">✕</button>
 			</header>
 
-			<div class="dialog-body box gap-sm pad-x-sm pad-y-sm overflow-y-auto">
+			<div class="dialog-body box gap-sm pad-x-sm pad-y-sm scroll-y">
 				{#if entry.time}
 					<div class="row ycenter gap-2xs text-sm">
 						<span class="text-muted tt-u weight-600 text-xs">Timestamp</span>

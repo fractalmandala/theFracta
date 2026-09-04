@@ -31,7 +31,7 @@
 				disabled={graphState.activeFlowStepIndex === 0}
 				onclick={() => graphState.prevFlowStep()}
 			>◀ Prev</button>
-			<div class="box gap-3xs text-center grow min0">
+			<div class="box gap-3xs tt-c grow min0">
 				<span class="text-xs text-muted">Step {graphState.activeFlowStepIndex + 1} of {totalSteps}</span>
 				<span class="text-sm weight-500 truncate">{currentStep}</span>
 			</div>
