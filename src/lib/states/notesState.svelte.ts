@@ -5,12 +5,12 @@ import { settings } from '$lib/stores/settings';
 import { tocVisible, tocEntries, toggleToc } from '$lib/stores/toc';
 import { copyAsRichText, copyAsMarkdown } from '$lib/utils/clipboard';
 import { newDocument } from '$lib/tauri/files';
+import { appState } from './appState.svelte';
 
 class NotesState {
 	rawMode = $state(false);
 	splitMode = $state(false);
 	presenting = $state(false);
-	settingsVisible = $state(false);
 	showReaderControls = $state(false);
 	showCopyMenu = $state(false);
 	copyFeedback = $state('');
@@ -102,7 +102,9 @@ class NotesState {
 
 	openSettings() {
 		this.closeOverlays();
-		this.settingsVisible = true;
+		// Settings is app-scoped: one dialog, owned by the shell, reachable from
+		// every surface rather than only from an open document.
+		appState.openSettings();
 	}
 
 	newDoc() {

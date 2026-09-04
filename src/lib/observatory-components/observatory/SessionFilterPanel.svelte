@@ -5,8 +5,7 @@
 	let availableAgents = $derived(observatory.availableAgents.filter((a) => a !== 'all'));
 </script>
 
-{#if observatory.filterPanelOpen}
-	<aside class="filter-panel border-left box gap-sm pad-sm" aria-label="Filters">
+<div class="filter-panel box gap-sm pad-sm">
 		<header class="row ycenter xbetween pad-y-2xs border-bottom">
 			<span class="text-sm weight-600">Filters</span>
 			<button class="button is-icon text-muted" onclick={() => observatory.filterPanelOpen = false} aria-label="Close filters">×</button>
@@ -92,5 +91,4 @@
 				</div>
 			</section>
 		{/if}
-	</aside>
-{/if}
+</div>

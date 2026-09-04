@@ -1044,6 +1044,10 @@ button.blank
 .dialog-card
 	display: flex
 	flex-direction: column
+	// The backdrop centres the card with .xcenter, which also sets text-align:
+	// center — and that inherits into everything inside. Dialog content reads as
+	// prose and forms, so the card restores normal alignment.
+	text-align: left
 	background: var(--bg-dialog)
 	border: 1px solid var(--border)
 	border-radius: var(--radius-md)
@@ -1524,3 +1528,162 @@ button.blank
 	flex-direction: column
 	min-height: 0
 	overflow: hidden
+
+// =============================================================================
+// RAIL — the collapsible, drag-resizable side column.
+//
+// One class family behind Rail.svelte, used by every standing sidebar on every
+// surface. The rail owns its width, border and scrolling; whatever is rendered
+// inside it is only content.
+// =============================================================================
+
+:root
+	--rail-collapsed-w: 22px
+	--rail-grip-w: 5px
+
+.rail
+	position: relative
+	flex: 0 0 var(--rail-w)
+	width: var(--rail-w)
+	min-width: 0
+	display: flex
+	min-height: 0
+	background: var(--bg-surface)
+	// No transition on the width. Both flex-basis and width read --rail-w, and a
+	// transition on a var()-driven property keeps resolving the value it had when
+	// the transition was installed — the rail would stay at its initial width no
+	// matter what the drag set. Dragging has to track the pointer exactly in any
+	// case, so nothing is lost.
+
+.rail-dragging
+	user-select: none
+
+.rail-collapsed
+	flex-basis: var(--rail-collapsed-w)
+	width: var(--rail-collapsed-w)
+
+.rail-left
+	border-right: 1px solid var(--border)
+.rail-right
+	border-left: 1px solid var(--border)
+
+.rail-body
+	flex: 1 1 0%
+	min-width: 0
+	min-height: 0
+	overflow: auto
+	overscroll-behavior: contain
+
+// The drag handle sits on the rail's outer edge, a few pixels wide, and widens
+// its hit area with a padded pseudo-element so it is grabbable without being
+// visible.
+.rail-grip
+	position: absolute
+	top: 0
+	bottom: 0
+	width: var(--rail-grip-w)
+	cursor: col-resize
+	z-index: var(--z-raised)
+	touch-action: none
+	&::after
+		content: ''
+		position: absolute
+		inset-block: 0
+		left: 50%
+		width: 1px
+		transform: translateX(-50%)
+		background: transparent
+	&:hover::after,
+	&:focus-visible::after
+		background: var(--theme-color)
+	&:focus-visible
+		outline: 2px solid var(--theme-color)
+		outline-offset: -2px
+
+.rail-left .rail-grip
+	right: calc(var(--rail-grip-w) / -2)
+.rail-right .rail-grip
+	left: calc(var(--rail-grip-w) / -2)
+
+.rail-dragging .rail-grip::after
+	background: var(--theme-color)
+
+// The collapse control rides the same edge as the grip, near the top, and stays
+// reachable when the rail is collapsed to its strip.
+.rail-toggle
+	position: absolute
+	top: var(--space-2xs)
+	z-index: calc(var(--z-raised) + 1)
+	width: 18px
+	height: 18px
+	display: inline-flex
+	align-items: center
+	justify-content: center
+	padding: 0
+	border: 1px solid var(--border)
+	border-radius: var(--radius-2)
+	background: var(--bg-raised)
+	color: var(--text-muted)
+	&:hover
+		color: var(--text-primary)
+		border-color: var(--theme-color)
+	&:focus-visible
+		outline: 2px solid var(--theme-color)
+		outline-offset: 1px
+
+// The toggle straddles the rail's divider rather than sitting inside the rail,
+// so it never lands on top of the panel's own heading.
+.rail-left .rail-toggle
+	right: -9px
+.rail-right .rail-toggle
+	left: -9px
+
+// A collapsed rail is a strip holding only its toggle, centred in it.
+.rail-collapsed .rail-toggle
+	top: var(--space-2xs)
+	left: 50%
+	right: auto
+	transform: translateX(-50%)
+
+// Rails supply their own width now, so the fixed-width shell rails must not
+// fight them when a Rail is used in their place.
+.rail .sidebar-left,
+.rail .sidebar-right,
+.rail .observatory-sidebar,
+.rail .filter-panel,
+.rail .toc-sidebar,
+.rail .wiki-inspector
+	width: 100%
+	flex: 1 1 auto
+	border: none
+
+// The icon strip is a full-height column in three zones: the surfaces, then the
+// active surface's own actions, then application-level controls.
+//
+// Only the middle zone scrolls. If the strip scrolled as a whole, a surface with
+// a long action list (Notes) would push the global controls past the bottom edge
+// — which is exactly what the theme toggle needs never to do.
+.app-shell-tube .left-strip .in-left-strip
+	display: flex
+	flex-direction: column
+	padding-bottom: var(--space-sm)
+	// Visible, not hidden: the globals zone hosts a popover palette picker that
+	// is far wider than the 64px strip and has to escape it. Scrolling is the
+	// middle zone's job, so the container never needs to clip.
+	overflow: visible
+
+.strip-surfaces,
+.strip-globals
+	flex: 0 0 auto
+
+.strip-actions
+	flex: 1 1 auto
+	min-height: 0
+
+// The settings dialog is two-pane: a section list that governs scope, and the
+// section itself. The list is fixed-width so switching sections never shifts it.
+.settings-nav
+	width: 168px
+	flex: 0 0 168px
+	background: var(--bg-surface)
+	overflow-y: auto

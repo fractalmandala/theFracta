@@ -28,16 +28,16 @@
 	import { invoke } from "@tauri-apps/api/core";
 	import { tocVisible, tocEntries } from "$lib/stores/toc";
 	import { notesState } from "$lib/states/notesState.svelte";
+	import { appState } from "$lib/states/appState.svelte";
 	import MarkdownRenderer from "$lib/components/MarkdownRenderer.svelte";
 	import DropZone from "$lib/components/DropZone.svelte";
 	import EmptyState from "$lib/components/EmptyState.svelte";
 	import TableOfContents from "$lib/components/TableOfContents.svelte";
+	import Rail from "$lib/components/Rail.svelte";
 	import TabBar from "$lib/components/TabBar.svelte";
 	import SearchOverlay from "$lib/components/SearchOverlay.svelte";
 	import PasteModal from "$lib/components/PasteModal.svelte";
 	import OpenDialog from "$lib/components/OpenDialog.svelte";
-	import SettingsDialog from "$lib/components/SettingsDialog.svelte";
-	import AboutDialog from "$lib/components/AboutDialog.svelte";
 	import CustomPromptModal from "$lib/components/CustomPromptModal.svelte";
 	import {
 		assembleUrlByIds,
@@ -67,8 +67,6 @@
 	let pasteVisible = $state(false);
 	let pasteDefaultMode = $state<"paste" | "url">("paste");
 	let openVisible = $state(false);
-	let settingsVisible = $state(false);
-	let aboutVisible = $state(false);
 	let customPromptVisible = $state(false);
 	let customPromptSelection = $state("");
 	let zenMode = $state(false);
@@ -110,8 +108,8 @@
 		searchVisible ||
 			pasteVisible ||
 			openVisible ||
-			settingsVisible ||
-			aboutVisible ||
+			appState.settingsVisible ||
+			appState.aboutVisible ||
 			customPromptVisible ||
 			lightboxVisible,
 	);
@@ -582,7 +580,7 @@
 			zenMode = !zenMode;
 		};
 		(window as any).__fracta_about = () => {
-			aboutVisible = true;
+			appState.openAbout();
 		};
 		// App-quit guard (#54): the red-button (CloseRequested) and Cmd+Q / menu
 		// Quit (custom "quit" menu item) both route here rather than terminating, so
@@ -915,13 +913,6 @@
 			return;
 		}
 
-		// Cmd+, open settings (macOS Preferences convention)
-		if ((e.metaKey || e.ctrlKey) && e.key === ",") {
-			e.preventDefault();
-			settingsVisible = !settingsVisible;
-			return;
-		}
-
 		// Cmd+W close tab (with dirty confirm)
 		if ((e.metaKey || e.ctrlKey) && e.key === "w") {
 			e.preventDefault();
@@ -1173,10 +1164,14 @@
 	});
 </script>
 
-<div class="page-split wfull">
-	<aside class="page-sidebar">
+<!--
+  .page-split's fixed sidebar track is replaced by a Rail, so the library can be
+  resized and collapsed like every other sidebar in the app.
+-->
+<div class="row wfull grow min0">
+	<Rail id="notes-library" side="left" label="Library" initial={260} min={200} max={480}>
 		<KnowledgeLibrary/>
-	</aside>
+	</Rail>
 
 	<section class="page-main">
 		{#if !zenMode}
@@ -1190,8 +1185,6 @@
 		<SearchOverlay bind:visible={searchVisible} />
 		<PasteModal bind:visible={pasteVisible} defaultMode={pasteDefaultMode} />
 		<OpenDialog bind:visible={openVisible} />
-		<SettingsDialog bind:visible={notesState.settingsVisible} />
-		<AboutDialog bind:visible={aboutVisible} />
 		<CustomPromptModal bind:visible={customPromptVisible} selection={customPromptSelection} />
 
 			<!--
@@ -1301,9 +1294,9 @@
 		{/if}
 
 			{#if !zenMode && !activeTab?.isEditing}
-				<aside class="sidebar-right toc-sidebar" aria-label="On this page">
+				<Rail id="notes-toc" side="right" label="On this page" initial={240} min={180} max={400}>
 					<TableOfContents />
-				</aside>
+				</Rail>
 			{/if}
 			</div>
 

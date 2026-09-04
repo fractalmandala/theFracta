@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { observatory } from '$lib/observatory-state/observatory.svelte';
+	import Rail from '$lib/components/Rail.svelte';
 	import ObservatoryHeader from './ObservatoryHeader.svelte';
 	import SessionSidebar from './SessionSidebar.svelte';
 	import SessionFilterPanel from './SessionFilterPanel.svelte';
@@ -44,7 +45,9 @@
 	{:else}
 		<div class="row grow min0">
 			{#if showSessionList}
-				<SessionSidebar />
+				<Rail id="obs-sessions" side="left" label="Filtered sessions" initial={260} min={200} max={480}>
+					<SessionSidebar />
+				</Rail>
 			{/if}
 
 			<main class="observatory-canvas">
@@ -88,7 +91,11 @@
 				{/if}
 			</main>
 
-			<SessionFilterPanel />
+			{#if observatory.filterPanelOpen}
+				<Rail id="obs-filters" side="right" label="Filters" initial={260} min={200} max={420}>
+					<SessionFilterPanel />
+				</Rail>
+			{/if}
 		</div>
 		<StatusFooter />
 	{/if}

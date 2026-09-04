@@ -10,7 +10,7 @@
 	}
 </script>
 
-<aside class="observatory-sidebar border-right box gap-3xs pad-y-2xs" aria-label="Filtered sessions">
+<div class="observatory-sidebar box gap-3xs pad-y-2xs">
 	<!-- Search row -->
 	<div class="row ycenter gap-2xs pad-x-2xs pad-y-3xs border-bottom">
 		<input
@@ -57,4 +57,4 @@
 			<p class="text-sm text-muted pad-x-2xs m-0">No sessions match the current Fractorches query and filters.</p>
 		{/each}
 	</div>
-</aside>
+</div>
