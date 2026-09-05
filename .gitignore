@@ -12,6 +12,9 @@ coverage/
 !.env.example
 src-tauri/binaries/
 
+# Qoder agent session log: local IDE harness artifact, never repo content
+/session.jsonl
+
 # === Wiki privacy boundary - never commit corpus or machine-local data ===
 # See docs/wiki-privacy.md
 # ~/.fracta/ is never inside the working tree, but guard against accidents:
@@ -28,3 +31,21 @@ src-tauri/binaries/
 # Any accidental corpus export
 chat-corpus/
 wiki-corpus/
+# Wiki article store: private user data, never committed (decision D010)
+/wiki/
+
+# Private conversation data. The Fractorches sessions database holds the full
+# text of the user's agent chats; the notes vault index holds the text of their
+# notes. Both live outside the repo by design — app-support directories, never a
+# dotfolder beside the source — so these rules are a backstop, not the mechanism.
+# They exist so that a database copied in for debugging cannot be committed by
+# reflex.
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+sessions.db*
+index.sqlite3*

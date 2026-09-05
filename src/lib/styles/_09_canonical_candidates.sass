@@ -1,0 +1,686 @@
+:root
+	--transin-2: cubic-bezier(0.550, 0.055, 0.675, 0.190)
+	--transin-3: cubic-bezier(0.755, 0.050, 0.855, 0.060)
+	--transin-1: cubic-bezier(0.470, 0.000, 0.745, 0.715)
+	--transout-1: cubic-bezier(0.390, 0.575, 0.565, 1.000)
+	--transout-2: cubic-bezier(0.215, 0.610, 0.355, 1.000)
+	--transout-3: cubic-bezier(0.230, 1.000, 0.320, 1.000)
+	--trans-button: var(--speed-0) var(--transout-2)
+	--speed-1: 90ms
+	--speed-2: 140ms
+	--speed-3: 220ms
+	--speed-0: 40ms
+	--text-2xs: 0.65rem
+	--text-xs: 0.75rem
+	--text-sm: 0.875rem
+	--text-bs: clamp(1rem, 1rem + 0vw, 1rem)
+	--text-lg: clamp(1.2rem, 1.1456rem + 0.2418vw, 1.333rem)
+	--text-xl: clamp(1.44rem, 1.3022rem + 0.6125vw, 1.7769rem)
+	--text-2xl: clamp(1.728rem, 1.4659rem + 1.1647vw, 2.3686rem)
+	--text-3xl: clamp(2.0736rem, 1.6303rem + 1.9704vw, 3.1573rem)
+	--text-4xl: clamp(2.4883rem, 1.7845rem + 3.128vw, 4.2087rem)
+	--text-5xl: clamp(2.986rem, 1.9124rem + 4.7714vw, 5.6102rem)
+	--radius-4: 4px
+
+p, small, li, ol, ul, h6, h5, h4, h3, h2, h1
+	margin: 0
+
+ul.unstyled, ol.unstyled
+	list-style: none
+	padding-left: 0
+	margin-left: 0
+
+.card-grid
+	display: grid
+	grid-template-columns: repeat(auto-fit, minmax(min(var(--card-min), 100%), 1fr))
+
+.text-theme
+	color: var(--theme-color)
+.text-2xs
+	font-size: var(--text-2xs)
+.text-xs
+	font-size: var(--text-xs)
+.text-sm
+	font-size: var(--text-sm)
+	font-weight: 300
+.text.bs
+	font-size: var(--text-bs)
+	font-weight: 300
+.text-md
+	font-size: var(--text-md)
+	font-weight: 300
+.text-lg
+	font-size: var(--text-lg)
+.text-xl
+	font-size: var(--text-xl)
+.text-2xl
+	font-size: var(--text-2xl)
+.text-3xl
+	font-size: var(--text-3xl)
+.text-4xl
+	font-size: var(--text-4xl)
+.text-5xl
+	font-size: var(--text-5xl)
+.lh12
+	line-height: 1.2
+.tt-u
+	text-transform: uppercase
+.tt-c
+	text-transform: capitalize
+.ta-c
+	text-align: center
+.ta-l
+	text-align: left
+
+.card, button.card
+	display: flex
+	padding: calc(var(--space-md) * var(--pad-scale, 1))
+	background: var(--bg-panel)
+	border: 1px solid var(--border)
+
+.card-plain, button.card-plain
+	display: flex
+	padding: calc(var(--space-md) * var(--pad-scale, 1))
+	background: none
+	border: none
+
+.card-outline, button.card-outline
+	display: flex
+	padding: calc(var(--space-md) * var(--pad-scale, 1))
+	border: 1px solid var(--border-subtle)
+	background: none
+
+a.card, a.card-plain, a.card-outline
+	text-decoration: none
+	.card-title
+		transition: color 90ms var(--transout-3)
+	&:hover
+		.card-title
+			color: var(--theme-color)
+
+a.card-outline, a.card
+	transition: border 90ms var(--transin-3)
+	&:hover
+		border: 1px solid var(--theme-color)
+
+.button
+	&.is-icon-outline
+		padding: 0
+		height: 24px
+		width: 24px
+		background: var(--bg-surface)
+		border-radius: 4px
+		border: 1px solid var(--border)
+		color: var(--text-primary)
+		&:hover
+			background: var(--state-hover)
+	&.small
+		padding: 2px 4px
+		height: max-content
+		font-size: var(--text-sm)
+	&.small-ghost
+		padding: 2px 4px
+		background: none
+		border: 1px solid transparent
+		height: max-content
+		border-radius: 4px
+		&:hover
+			border: 1px solid var(--theme-color)
+		&.active
+			color: var(--theme-color)
+
+.button
+	&.is-icon
+		color: var(--text-secondary)
+		svg
+			transition: transform 200ms var(--transin-1)
+			transform-origin: center center
+		&:hover
+			svg
+				transform: scale(1.05)
+	&.is-icon.solid
+		color: var(--text-primary)
+
+.button
+	&.small
+		&.ghost
+			background: none
+			border: none
+			font-weight: 400
+			color: var(--text-primary)
+			&:hover
+				color: var(--text-primary)
+		&.active
+			color: var(--theme-color)
+
+.button
+	&.is-icon-text
+		display: flex
+		gap: var(--space-2xs)
+		align-items: center
+		height: max-content
+		padding: 0.4rem 0.6rem
+		background: var(--theme-color)
+		color: var(--text-inverse)
+		border-radius: 4px
+		transition: background var(--trans-button), transform var(--trans-button), border var(--trans-button), color var(--trans-button)
+		&.outline
+			border: 1px solid var(--text-secondary)
+			background: none
+			color: var(--text-secondary)
+			&:hover
+				background: none
+				border: 1px solid var(--theme-color)
+				color: var(--theme-color)
+		&:hover
+			background: var(--theme-color-alt)
+
+.button
+	&.header-nav
+		padding: 0
+		height: max-content
+		font-size: var(--text-bs)
+		font-weight: 500
+		text-transform: uppercase
+		background: none
+		color: var(--text-primary)
+		&:hover
+			color: var(--text-primary)
+		&.active
+			border: none
+			color: var(--theme-color)
+
+button.link
+	background: none
+	border: none
+	color: var(--text-primary)
+	text-decoration: none
+	&:hover
+		text-decoration: none
+
+button.navtree-link
+	background: none
+	border: none
+
+
+
+// =============================================================================
+// Gaps in the fractalstyler2 contract, found by migrating Fracta onto it.
+//
+// Everything below was tried against the registry first. What could be renamed
+// to a canonical class was renamed; what could be composed from existing classes
+// was composed away in the markup. These are what is left — each one is a
+// proposal for the contract, not a private convenience.
+// =============================================================================
+
+// --- Text alignment ----------------------------------------------------------
+// .ta-c and .ta-l already live above; .ta-r completes the set. The contract
+// carries alignment only on container modifiers (.box.xleft and friends), which
+// cannot align a single child against its siblings.
+.ta-r
+	text-align: right
+
+// --- Numerals ----------------------------------------------------------------
+// Any table or metric with a column of figures needs these to line up. The
+// contract has .mono but mono alone does not imply tabular figures.
+.tabular-nums
+	font-variant-numeric: tabular-nums
+
+// --- Letter spacing ----------------------------------------------------------
+// The type ladder sets sizes but never tracking, so display headings and
+// uppercase eyebrows have no canonical way to be tightened or opened up.
+.tracking-tight
+	letter-spacing: -0.015em
+.tracking-wider
+	letter-spacing: 0.06em
+.title-tight
+	letter-spacing: -0.02em
+	line-height: 1.15
+
+.italic
+	font-style: italic
+
+// --- Overflow and layering ---------------------------------------------------
+// The contract ships .scroll-x / .scroll-y for panes that scroll, but nothing
+// for a box that must clip, and no way to reach the --z-* tokens from markup.
+.overflow-hidden
+	overflow: hidden
+.z-modal
+	z-index: var(--z-modal)
+.inset-0
+	inset: 0
+.pointer-events-none
+	pointer-events: none
+
+// --- Interaction -------------------------------------------------------------
+// Buttons get a pointer from Fracta's own layer; labels wrapping a control need
+// one too, and there is no canonical cursor utility.
+.cursor-pointer
+	cursor: pointer
+
+// A control with no chrome. Promoted from `button.blank` — inputs inside search
+// bars and toolbars need the same treatment, so it should not be element-bound.
+.blank
+	background: none
+	border: none
+	&.pad0
+		padding: 0
+
+.opacity-half
+	opacity: 0.5
+
+// --- Alignment and sizing ----------------------------------------------------
+// .align-self-start is the per-child counterpart to the container's y-modifiers.
+// .mta pushes a flex child to the end of its track — a footer inside a column.
+.align-self-start
+	align-self: flex-start
+.mla
+	margin-left: auto
+
+.mta
+	margin-top: auto
+
+// The w-/h- scale is fixed sizes; these are floors, which wrapping cards need.
+.min-w-120
+	min-width: 120px
+
+// --- Extra separation --------------------------------------------------------
+// The contract spaces siblings with the parent's gap, deliberately. These four
+// sites want more separation than their row's gap gives. They are marked for
+// composing away when the component layer is reworked, not for keeping.
+.m-top-2xs
+	margin-top: var(--space-2xs)
+.m-top-3xs
+	margin-top: var(--space-3xs)
+.m-y-3xs
+	margin-block: var(--space-3xs)
+
+// --- Grid --------------------------------------------------------------------
+// .grid-1 through .grid-6 exist; a calendar week needs seven.
+.grid-7
+	display: grid
+	grid-template-columns: repeat(7, minmax(0, 1fr))
+	gap: var(--space-3xs)
+
+// --- Surfaces ----------------------------------------------------------------
+// The contract has bare-background classes for bg / surface / raised / panel /
+// footer / canvas / terminal, but --bg-dialog and --bg-popover have tokens with
+// no class, and there is no soft danger ground for inline error states.
+.bg-popover
+	background: var(--bg-popover)
+.bg-danger-soft
+	background: color-mix(in srgb, var(--danger) 12%, var(--bg))
+.backdrop-blur
+	background: color-mix(in srgb, var(--bg-surface) 88%, transparent)
+	backdrop-filter: blur(12px)
+	-webkit-backdrop-filter: blur(12px)
+.border-theme
+	border: 1px solid var(--theme-color)
+.text-inverse-muted
+	color: var(--text-inverse)
+	opacity: 0.72
+
+// --- Tables ------------------------------------------------------------------
+// The contract styles no table element at all, and three surfaces show tabular
+// data. This is the most clearly missing piece of the registry.
+.table-clean
+	width: 100%
+	border-collapse: collapse
+	font-size: var(--text-sm)
+	th
+		text-align: left
+		font-weight: 600
+		color: var(--text-muted)
+		font-size: var(--text-xs)
+		text-transform: uppercase
+		letter-spacing: 0.06em
+		padding: var(--space-2xs) var(--space-xs)
+		border-bottom: 1px solid var(--border)
+	td
+		padding: var(--space-2xs) var(--space-xs)
+		border-bottom: 1px solid var(--border-subtle)
+		color: var(--text-secondary)
+	tr:last-child td
+		border-bottom: none
+
+// --- Busy state --------------------------------------------------------------
+// Every app that loads anything needs one of these; the contract has none.
+.spinner
+	width: 18px
+	height: 18px
+	border: 2px solid var(--border)
+	border-top-color: var(--theme-color)
+	border-radius: var(--radius-full)
+	animation: fs-spin 0.7s linear infinite
+@keyframes fs-spin
+	to
+		transform: rotate(360deg)
+@media (prefers-reduced-motion: reduce)
+	.spinner
+		animation-duration: 2.4s
+
+button
+	cursor: pointer
+// --- Baseline alignment -------------------------------------------------------
+// .row carries ycenter / ytop / ybot but no baseline. A header that mixes a
+// large figure with a small label wants their baselines to line up, not their
+// boxes to centre.
+.row.ybase,
+.box.ybase
+	align-items: baseline
+
+// --- Semantic colour ----------------------------------------------------------
+// The contract has --success / --warning / --danger / --info tokens and .badge
+// variants that use them, but no way to reach them from markup. Status dots,
+// activity keys and legend swatches all need exactly that, and without it a
+// composed dot renders shapely and invisible.
+.bg-success
+	background: var(--success)
+.bg-warning
+	background: var(--warning)
+.bg-info
+	background: var(--info)
+.bg-theme
+	background: var(--theme-color)
+.text-success
+	color: var(--success)
+.text-warning
+	color: var(--warning)
+.text-danger
+	color: var(--danger)
+.text-info
+	color: var(--info)
+
+// --- Dashed edges -------------------------------------------------------------
+// Drop zones, "add another" affordances and empty placeholders all want a
+// dashed edge. The contract has .border but no way to change its style.
+.border-dashed
+	border-style: dashed
+
+// --- Segmented control --------------------------------------------------------
+// A small set of mutually exclusive choices, shown as one joined group. The
+// contract has .tab-list for navigation and .button for actions, but nothing
+// for a control that picks one of three. Fracta had grown three near-identical
+// versions of this — mode-segmented, rc-segmented and mode-tabs.
+.segmented
+	display: inline-flex
+	align-items: stretch
+	border: 1px solid var(--border)
+	border-radius: var(--radius-md)
+	overflow: hidden
+	background: var(--bg-surface)
+
+.segmented-item
+	appearance: none
+	border: none
+	background: none
+	padding: var(--space-3xs) var(--space-xs)
+	font-family: inherit
+	font-size: var(--text-xs)
+	line-height: 1.4
+	color: var(--text-secondary)
+	cursor: pointer
+	white-space: nowrap
+	// One shared hairline between neighbours rather than a border per item,
+	// which would double up and thicken every seam.
+	& + .segmented-item
+		border-left: 1px solid var(--border)
+	&:hover:not([aria-disabled='true'])
+		background: var(--state-hover)
+		color: var(--text-primary)
+	&.active
+		background: var(--bg)
+		color: var(--text-primary)
+		font-weight: 600
+
+// The contract ships --text-bs (the base step) but no class for it, while every
+// neighbouring step — xs, sm, md, lg — has one. The gap is the class, not the
+// token.
+.text-bs
+	font-size: var(--text-bs)
+
+// --- Dialog sizes -------------------------------------------------------------
+// The contract's .dialog ships one max-width, min(92vw, 540px). A settings
+// panel and a confirmation prompt are not the same size, so the width step
+// belongs in the contract alongside the component.
+// These set max-width, not width, and that is the whole point: .dialog ships
+// `max-width: min(92vw, 540px)` alongside `width: 100%`, and max-width always
+// wins over width. A size class that only set `width` was silently clamped to
+// 540px — every dialog came out the same size no matter which one it wore.
+//
+// Upstream, .dialog hardcoding a single max-width is the underlying problem:
+// the component ships one size and no way to vary it.
+.dialog-sm
+	max-width: min(92vw, 24rem)
+.dialog-md
+	max-width: min(92vw, 34rem)
+.dialog-lg
+	max-width: min(92vw, 48rem)
+.dialog-xl
+	max-width: min(94vw, 80rem)
+
+// Height only where a dialog genuinely wants to fill the viewport. A fixed
+// height on a settings panel just leaves dead space under the last section.
+.dialog-h-screen
+	height: 90vh
+
+.dialog
+	translate: -50% calc(-50% - 4px)
+	padding: 0
+	&.open,
+	&[open]
+		translate: -50% -50%
+
+// --- Dialog motion ------------------------------------------------------------
+// The contract declares a transition on .dialog, but for a native <dialog> it
+// never runs. showModal() takes the element from `display: none` straight to
+// the top layer, and a transition has no first frame to start from; close puts
+// it back to `display: none` at once, so there is no exit either. Both halves
+// need the two features that exist for exactly this:
+//
+//   @starting-style      supplies the "before opening" frame
+//   allow-discrete       keeps display and overlay animatable, so the element
+//                        stays painted for the length of the closing transition
+//
+// Without these a dialog can only pop. This belongs upstream with .dialog.
+// --- Dialog centring (upstream bug) -------------------------------------------
+// fractalstyler2 0.8.0 ships .dialog as:
+//     position: fixed; top: 50%; left: 50%; translate: 0 -4px
+//     &.open, &[open] { translate: 0 0 }
+// With no -50% compensation, the viewport centre becomes the dialog's TOP-LEFT
+// corner. Measured on a native <dialog> at 1440x860: rect x=720 y=430, i.e. the
+// whole panel sits in the bottom-right quadrant, off by half its own size.
+//
+// The 4px rise on open is worth keeping, so the correction carries it in the
+// closed state and settles to a true centre when open.
+.dialog
+	scale: 0.97
+	transition: opacity var(--motion-base) var(--ease-out), translate var(--motion-base) var(--ease-spring), scale var(--motion-base) var(--ease-spring), overlay var(--motion-base) allow-discrete, display var(--motion-base) allow-discrete
+	&[open]
+		scale: 1
+	&::backdrop
+		opacity: 0
+		transition: opacity var(--motion-base) var(--ease-out), overlay var(--motion-base) allow-discrete, display var(--motion-base) allow-discrete
+	&[open]::backdrop
+		opacity: 1
+
+// The opening frame. Written as a separate block because @starting-style must
+// not be nested inside the rule whose starting values it describes.
+@starting-style
+	.dialog[open]
+		opacity: 0
+		translate: -50% calc(-50% - 12px)
+		scale: 0.97
+	.dialog[open]::backdrop
+		opacity: 0
+
+.in-dialog
+	height: 800px
+
+// --- Semantic borders and state grounds ---------------------------------------
+// Companions to the bg-* / text-* set above. --state-hover-subtle and
+// --state-selected are contract tokens with no class, so a hover or selected
+// ground has to be hand-written every time it is needed.
+.border-success
+	border-color: var(--success)
+.bg-state-hover
+	background: var(--state-hover-subtle)
+
+// =============================================================================
+// NOTE: this file is a staging area for changes headed into fractalstyler2.
+// A class here is a proposal for the contract, so it must NOT be pruned just
+// because this app does not happen to use it yet. The entries below were
+// removed once by an "unreferenced class" sweep and restored.
+// =============================================================================
+
+.break
+	word-wrap: break-word
+	overflow-wrap: anywhere
+	word-break: break-word
+
+.auto-grid
+	display: grid
+	grid-template-columns: repeat(auto-fit, minmax(min(var(--item-min), 100%), 1fr))
+
+.text-alt
+	color: var(--theme-color-alt)
+.text-5xl
+	font-size: var(--text-5xl)
+
+.lh11
+	line-height: 1.1
+.lh15
+	line-height: 1.5
+.lh16
+	line-height: 1.6
+
+.margin-x-auto
+	margin-inline: auto
+
+.bg-dialog
+	background: var(--bg-dialog)
+.bg-danger
+	background: var(--danger)
+.bg-muted
+	background: var(--text-muted)
+.bg-state-selected
+	background: var(--state-selected)
+
+.border-warning
+	border-color: var(--warning)
+.border-danger
+	border-color: var(--danger)
+
+// --- Chromeless control -------------------------------------------------------
+// .blank strips the chrome; this adds the hover the contract's own controls
+// have. Six button families in the app were each writing these five lines.
+.is-ghost
+	background: none
+	border: none
+	color: var(--text-secondary)
+	&:hover
+		color: var(--text-primary)
+
+.radius-4
+	border-radius: 4px
+// --- Tooltip ------------------------------------------------------------------
+// The contract has no tooltip, and the browser's own — the `title` attribute —
+// is unusable for an icon toolbar: the delay before it appears is owned by the
+// OS, around a second, with no way to shorten it. On a bar where every control
+// is a glyph, that is the difference between a label and a guess.
+//
+// So: `.tip` plus `data-tip="…"`, rendered from the attribute in a pseudo
+// element. No JS, no wrapper markup, one class per button. `title` must come
+// OFF any element that gets this, or the native tooltip still arrives later and
+// you see the label twice. The accessible name stays on `aria-label`, which is
+// what a screen reader reads either way — `title` was never carrying that.
+.tip
+	position: relative
+	&::after
+		content: attr(data-tip)
+		position: absolute
+		top: calc(100% + 6px)
+		left: 50%
+		translate: -50% 0
+		z-index: var(--z-modal)
+		padding: var(--space-3xs) var(--space-2xs)
+		border-radius: 4px
+		background: var(--text-primary)
+		color: var(--bg)
+		font-size: var(--text-xs)
+		line-height: 1.3
+		white-space: nowrap
+		pointer-events: none
+		opacity: 0
+		visibility: hidden
+		transition: opacity var(--motion-fast) var(--transout-2), visibility var(--motion-fast)
+	// Appears quickly but not instantly, so sweeping the pointer across a row of
+	// buttons does not strobe every label on the way past. Leaves with no delay.
+	&:hover::after,
+	&:focus-visible::after
+		opacity: 1
+		visibility: visible
+		transition-delay: 190ms
+	// A tooltip centred under a button at the end of the bar would run past the
+	// window edge, where the shell's overflow clips it.
+	&.tip-end::after
+		left: auto
+		right: 0
+		translate: none
+
+// A control that is unavailable but can still say why.
+//
+// `disabled` takes an element out of hit-testing — and the contract's
+// .button:disabled adds `pointer-events: none` on top — so a disabled button
+// never matches :hover and never shows its tooltip. That is the one moment the
+// label matters most, because the question the user has is precisely why they
+// cannot click it. `aria-disabled` carries the same meaning to assistive
+// technology, keeps the control focusable and hoverable, and leaves the handler
+// to decline the click.
+[aria-disabled='true']
+	opacity: 0.5
+	cursor: not-allowed
+
+.header-right-buttons
+	width: var(--titlebar-inset)
+// --- Toolbar-sized select -----------------------------------------------------
+// The contract's .select is `width: 100%`, which is correct in a form column
+// and wrong in a toolbar: the control stretches to whatever space is going, so
+// two selects can eat a whole header row and leave the buttons beside them
+// crushed against the edge. There is no width or max-width utility in the
+// contract to rein it in with, so this is the gap.
+//
+// width: auto sizes to the widest option; the cap stops a long project path
+// from undoing that. The value truncates rather than widening the control.
+select, .select
+	appearance: none
+	background-color: transparent
+	border: none
+	padding: 0 1em 0 0
+	margin: 0
+	outline: none
+	&::-ms-expand
+		display: none
+
+.select-compact
+	width: 80px
+	text-overflow: ellipsis
+	border-radius: 4px
+	height: 1.5rem
+	border: 1px solid var(--border)
+	padding: 0.2rem 0.45rem
+	cursor: pointer
+	background-image: linear-gradient(to top, #f9f9f9, #fff 33%)
+	display: grid
+	grid-template-areas: "select"
+	align-items: center
+	&::after
+		content: ""
+		width: 0.6rem
+		height: 0.4rem
+		background-color: var(--theme-color)
+		clip-path: polygon(100% 0%, 0 0%, 50% 100%)
+	select, &:after
+		grid-area: select
+	&:after
+		justify-self: end

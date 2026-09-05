@@ -2,6 +2,9 @@
   import { tabStore, HOME_TAB_ID, type Tab } from "$lib/stores/tabs";
   import { newDocument } from "$lib/tauri/files";
   import { copyPath } from "$lib/utils/clipboard";
+	import { Icon } from 'fractalicons'
+	import { icXmark } from 'fractalicons/iconoir'
+	import { phArrowLeft } from 'fractalicons/phosphor'
 
   let {
     onCloseTab = (id: string) => tabStore.closeTab(id),
@@ -103,7 +106,6 @@
   }
 
   function handleContextMenu(e: MouseEvent, tab: Tab) {
-    if (!isFileTab(tab)) return;
     e.preventDefault();
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const menuWidth = 160;
@@ -123,21 +125,31 @@
     copyFeedback = success ? "Copied!" : "Failed";
     setTimeout(closeContextMenu, 900);
   }
-</script>
-<div class="tabbar sticky row ycenter gap-3xs pad-x-xs pad-top-2xs raised tabbar-top">
-	<!-- Home tab -->
-	<button class="tab tab-home is-icon text-secondary" class:tab-active={$activeTabId === HOME_TAB_ID}
-		onclick={() => tabStore.goHome()} aria-label="Home" title="Home">
-		<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
-			<path d="M2 6.5L7 2l5 4.5V12H9V9H5v3H2V6.5z"/>
-		</svg>
-	</button>
 
+  /**
+   * How many tabs "Close others" would actually close.
+   *
+   * Tabs with unsaved edits are kept, so the label says what will happen rather
+   * than offering to close work the action will refuse to discard.
+   */
+  const closableOthers = $derived(
+    contextMenuTab
+      ? $tabs.filter((t) => t.id !== contextMenuTab!.id && !t.dirty).length
+      : 0
+  );
+
+  function handleCloseOthers() {
+    if (!contextMenuTab) return;
+    tabStore.closeOthers(contextMenuTab.id);
+    closeContextMenu();
+  }
+</script>
+<div class="scroll-x row ycenter gap-2xs grow min0">
 	<!-- File tabs -->
-	<div class="tabbar-files row ybot gap-3xs grow min0" role="tablist" aria-label="Open documents">
+	<div class="scroll-x row ycenter gap-3xs grow min0" role="tablist" aria-label="Open documents">
 		{#each $tabs as tab, idx (tab.id)}
 			<div class="tab"
-				class:tab-active={$activeTabId === tab.id}
+				class:bg={$activeTabId === tab.id}
 				class:drag-over={overIndex === idx && dragIndex !== idx && dragIndex >= 0}
 				onmousedown={(e) => handleMouseDown(e, idx)}
 				onauxclick={(e) => handleAuxClick(e, tab.id)}
@@ -148,34 +160,37 @@
 				aria-selected={$activeTabId === tab.id}
 				tabindex="0">
 				<span class="tab-label row ycenter gap-2xs truncate">
-					{#if tab.dirty}<span class="tab-dirty text-theme weight-700" title="Unsaved changes">•</span>{/if}
-					<span class="truncate">{tab.fileName}</span>
+					{#if tab.dirty}<span class="text-warning text-theme weight-700" data-tip="Unsaved changes">•</span>{/if}
+					<p class="text-bs tt-u text-primary">{tab.fileName}</p>
 				</span>
-				<span class="tab-close is-icon text-muted" role="button" tabindex="0"
+				<button class="button is-icon" tabindex="0"
 					aria-label={`Close ${tab.fileName}`}
 					onclick={(e) => handleClose(e, tab.id)}
 					onkeydown={(e) => handleCloseKeydown(e, tab.id)}>
-					<svg width="9" height="9" viewBox="0 0 9 9" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><line x1="1.5" y1="1.5" x2="7.5" y2="7.5"/><line x1="7.5" y1="1.5" x2="1.5" y2="7.5"/></svg>
-				</span>
+					<Icon icon={icXmark} size={20}/>
+				</button>
 			</div>
 		{/each}
 	</div>
-
-	<!-- New tab button -->
-	<button class="new-tab-btn is-icon text-muted" onclick={handleNewTab} title="New tab" aria-label="New tab">
-		<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-			<line x1="6" y1="2" x2="6" y2="10"/>
-			<line x1="2" y1="6" x2="10" y2="6"/>
-		</svg>
-	</button>
 </div>
 
 {#if contextMenuTab}
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div class="scrim fixed inset-0 scrim-raised" onclick={closeContextMenu} onkeydown={() => {}}></div>
-	<div class="dropdown popover-shadow fixed bg border pad-3xs" style="--dropdown-x: {contextMenuPos.x}px; --dropdown-y: {contextMenuPos.y}px;">
-		<button onclick={handleCopyPath} class="dropdown-item row ycenter gap-2xs wfull text-sm text-left">
-			<span class="truncate">{copyFeedback || "Copy Path"}</span>
+	<div class="popover open fixed at-pointer pad-3xs" style="--dropdown-x: {contextMenuPos.x}px; --dropdown-y: {contextMenuPos.y}px;">
+		{#if isFileTab(contextMenuTab)}
+			<button onclick={handleCopyPath} class="navtree-link gap-2xs wfull ta-l">
+				<span class="truncate">{copyFeedback || "Copy Path"}</span>
+			</button>
+		{/if}
+		<button
+			onclick={handleCloseOthers}
+			class="navtree-link gap-2xs wfull ta-l"
+			disabled={closableOthers === 0}
+		>
+			<span class="truncate">
+				Close {closableOthers} other{closableOthers === 1 ? "" : "s"}
+			</span>
 		</button>
 	</div>
 {/if}

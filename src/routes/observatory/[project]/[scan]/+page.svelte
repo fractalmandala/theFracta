@@ -15,9 +15,9 @@
 	});
 </script>
 
-<div class="observatory-project row grow min0 wfull">
+<div class="text-muted text-xs row grow min0 wfull">
 	<Sidebar />
-	<div class="observatory-canvas grow min0">
+	<div class="box gap-sm pad-sm scroll-y grow min0">
 		{#if projectsState.isLoading}
 			<div class="box ycenter xcenter gap-sm pad-2xl">
 				<div class="spinner" aria-hidden="true"></div>
@@ -25,8 +25,8 @@
 			</div>
 		{:else if projectsState.error}
 			<div class="box ycenter xcenter gap-sm pad-2xl text-danger">
-				<h3 class="text-md weight-600 m-0">Scan not found</h3>
-				<p class="text-sm text-muted m-0">{projectsState.error}</p>
+				<h3 class="text-md weight-600">Scan not found</h3>
+				<p class="text-sm text-muted">{projectsState.error}</p>
 			</div>
 		{:else if projectsState.activeScan}
 			{#if projectsState.activeScan.scan === 'health'}

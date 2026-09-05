@@ -2,8 +2,9 @@
   import { Icon } from "fractalicons";
   import { luX } from "fractalicons/lucide";
   import { settings } from "$lib/stores/settings";
+  import PalettePicker from "./PalettePicker.svelte";
+  import { appFonts } from "$lib/states/appFonts.svelte";
   import {
-    ThemePicker,
     LayoutPicker,
     ShapePicker,
     ColorPicker,
@@ -67,83 +68,163 @@
     setTheme(null);
     setMode("light");
   }
+  /**
+   * A native <dialog>, opened with showModal(). The browser owns the top layer,
+   * the focus trap, the inert background and Escape — all of which were either
+   * hand-rolled per dialog or simply missing. ::backdrop replaces the scrim.
+   */
+  let el = $state<HTMLDialogElement | null>(null);
+
+  $effect(() => {
+    if (!el) return;
+    if (visible && !el.open) el.showModal();
+    else if (!visible && el.open) el.close();
+  });
+
+  // A backdrop click lands on the dialog element itself; content is in a child.
+  function onBackdropClick(e: MouseEvent) {
+    if (e.target === el) visible = false;
+  }
+
 </script>
 
-{#if visible}
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="dialog-backdrop fixed inset-0 box ycenter xcenter pad-top-2xl" onclick={handleBackdropClick} onkeydown={handleKeydown}>
-    <div class="dialog-card card bg-dialog border box dialog-lg" role="dialog" aria-modal="true" aria-labelledby="app-settings-title">
-      <header class="dialog-header row ycenter xbetween pad-x-sm pad-y-xs border-bottom">
-        <h2 id="app-settings-title" class="text-md weight-600 m-0">Settings</h2>
-        <button onclick={() => (visible = false)} class="button is-icon text-muted" aria-label="Close settings">
+<dialog
+  bind:this={el}
+  class="dialog dialog-xl box"
+  onclose={() => (visible = false)}
+  onclick={onBackdropClick} aria-modal="true" aria-labelledby="app-settings-title"
+>
+  <div class="box hfull in-dialog">
+      <header class="row ycenter xbetween pad-x-sm border-bottom">
+        <h2 class="text-sm weight-600">Settings</h2>
+        <button onclick={() => (visible = false)} class="button is-icon" aria-label="Close settings">
           <Icon icon={luX} size={16} decorative />
         </button>
       </header>
-
-      <div class="dialog-content-flex">
-        <nav class="settings-nav box gap-3xs pad-sm border-right shrink-0" aria-label="Settings sections">
-          <span class="text-3xs weight-600 tt-u text-muted pad-y-2xs">Application</span>
+      <div class="row grow min0">
+        <nav class="scroll-y navtree pad-y-xs pad-x-md border-right pad-top-lg" aria-label="Settings sections">
+          <div class="box gap-xs">
+          <span class="text-2xs weight-600 tt-u text-muted">Application</span>
           {#each sections.filter((s) => s.scope === "app") as section}
             <button
-              class="dialog-tab text-left"
-              class:dialog-tab-active={active === section.id}
+              class="navtree-link ta-l radius-4"
+              class:active={active === section.id}
               aria-current={active === section.id ? "true" : undefined}
               onclick={() => (active = section.id)}
             >{section.label}</button>
           {/each}
-
-          <span class="text-3xs weight-600 tt-u text-muted pad-y-2xs m-top-2xs">Notes</span>
+          </div>
+          <div class="navtree-sub">
+          <span class="text-2xs weight-600 tt-u text-muted pad-y-2xs">Notes</span>
           {#each sections.filter((s) => s.scope === "notes") as section}
             <button
-              class="dialog-tab text-left"
-              class:dialog-tab-active={active === section.id}
+              class="navtree-link ta-l"
+              class:active={active === section.id}
               aria-current={active === section.id ? "true" : undefined}
               onclick={() => (active = section.id)}
             >{section.label}</button>
           {/each}
+          </div>
         </nav>
-
-        <div class="dialog-body box gap-sm pad-x-md pad-y-md scroll-y grow min0">
+        <div class="pad-sm box gap-sm pad-x-md pad-y-md scroll-y grow min0">
           {#if active === "appearance"}
-            <section class="settings-section box gap-2xs pad-y-xs">
-              <h3 class="text-xs weight-600 tt-u text-muted m-0 pad-y-2xs">Palette</h3>
-              <div class="settings-row row ycenter xbetween gap-sm pad-y-2xs">
-                <span class="settings-row-text box gap-3xs grow min0">
-                  <span class="text-sm weight-500 text-primary">Theme</span>
-                  <span class="text-xs text-muted">
-                    {presets.theme
-                      ? presets.theme.replace(/^theme-/, "").replace(/-/g, " ")
-                      : "No palette — plain light or dark"}
-                  </span>
+            <section class="border-bottom box gap-2xs pad-y-xs">
+              <div class="row ycenter xbetween gap-sm">
+                <h3 class="text-xs weight-600 tt-u text-muted pad-y-2xs">Palette</h3>
+                <span class="text-xs text-muted truncate">
+                  {presets.theme
+                    ? presets.theme.replace(/^theme-/, "").replace(/-/g, " ")
+                    : "No palette — plain light or dark"}
                 </span>
-                <ThemePicker />
               </div>
+              <!--
+                Inline rather than the contract's ThemePicker popover: a popover
+                opened inside a dialog is clipped by it, which left most of the
+                76 palettes off the edge of this panel and unreachable.
+              -->
+              <PalettePicker />
             </section>
 
-            <section class="settings-section box gap-2xs pad-y-xs">
-              <h3 class="text-xs weight-600 tt-u text-muted m-0 pad-y-2xs">Presets</h3>
-              <p class="text-xs text-muted m-0">Four independent axes from fractalstyler2. Each one persists on its own.</p>
-              <div class="settings-row row ycenter xbetween gap-sm pad-y-2xs">
+            <!--
+              The app's two fonts, bound to --font-sans and --font-mono. The
+              families are enumerated natively: queryLocalFonts() is
+              Chromium-only and this app runs in WebKit, so the webview cannot
+              ask for them itself.
+            -->
+            <section class="border-bottom box gap-2xs pad-y-xs">
+              <h3 class="text-xs weight-600 tt-u text-muted pad-y-2xs">Typography</h3>
+              {#if appFonts.unavailable}
+                <p class="text-xs text-muted">{appFonts.unavailable}</p>
+              {:else}
+                <div class="row ycenter xbetween gap-sm pad-y-2xs">
+                  <span class="box gap-3xs grow min0">
+                    <span class="text-sm weight-500 text-primary">Interface font</span>
+                    <span class="text-xs text-muted">Everything the app draws, via --font-sans.</span>
+                  </span>
+                  <select
+                    class="select select-compact text-xs shrink-0"
+                    aria-label="Interface font"
+                    value={appFonts.sans ?? ""}
+                    onchange={(e) => appFonts.set("sans", e.currentTarget.value || null)}
+                  >
+                    <option value="">Stylesheet default</option>
+                    {#each appFonts.available as family}
+                      <option value={family}>{family}</option>
+                    {/each}
+                  </select>
+                </div>
+                <div class="row ycenter xbetween gap-sm pad-y-2xs">
+                  <span class="box gap-3xs grow min0">
+                    <span class="text-sm weight-500 text-primary">Monospace font</span>
+                    <span class="text-xs text-muted">
+                      Code, the raw editor and its line numbers, via --font-mono.
+                      Only monospaced families are offered: the editor's gutter
+                      aligns with character widths, so a proportional font would
+                      pull the numbers out of line.
+                    </span>
+                  </span>
+                  <select
+                    class="select select-compact text-xs shrink-0"
+                    aria-label="Monospace font"
+                    value={appFonts.mono ?? ""}
+                    onchange={(e) => appFonts.set("mono", e.currentTarget.value || null)}
+                  >
+                    <option value="">Stylesheet default</option>
+                    {#each appFonts.monospaced as family}
+                      <option value={family}>{family}</option>
+                    {/each}
+                  </select>
+                </div>
+                <p class="text-2xs text-muted">
+                  {appFonts.available.length} families installed, {appFonts.monospaced.length} monospaced.
+                </p>
+              {/if}
+            </section>
+
+            <section class="border-bottom box gap-2xs pad-y-xs">
+              <h3 class="text-xs weight-600 tt-u text-muted pad-y-2xs">Presets</h3>
+              <p class="text-xs text-muted">Four independent axes from fractalstyler2. Each one persists on its own.</p>
+              <div class="row ycenter xbetween gap-sm pad-y-2xs">
                 <span class="text-sm text-primary">Layout density</span>
                 <LayoutPicker />
               </div>
-              <div class="settings-row row ycenter xbetween gap-sm pad-y-2xs">
+              <div class="row ycenter xbetween gap-sm pad-y-2xs">
                 <span class="text-sm text-primary">Corner shape</span>
                 <ShapePicker />
               </div>
-              <div class="settings-row row ycenter xbetween gap-sm pad-y-2xs">
+              <div class="row ycenter xbetween gap-sm pad-y-2xs">
                 <span class="text-sm text-primary">Colour intensity</span>
                 <ColorPicker />
               </div>
-              <div class="settings-row row ycenter xbetween gap-sm pad-y-2xs">
+              <div class="row ycenter xbetween gap-sm pad-y-2xs">
                 <span class="text-sm text-primary">Motion</span>
                 <MotionPicker />
               </div>
             </section>
 
-            <section class="settings-section box gap-2xs pad-y-xs">
-              <div class="settings-row row ycenter xbetween gap-sm pad-y-2xs">
-                <span class="settings-row-text box gap-3xs grow min0">
+            <section class="border-bottom box gap-2xs pad-y-xs">
+              <div class="row ycenter xbetween gap-sm pad-y-2xs">
+                <span class="box gap-3xs grow min0">
                   <span class="text-sm weight-500 text-primary">Reset appearance</span>
                   <span class="text-xs text-muted">Drop the palette and return to light mode.</span>
                 </span>
@@ -152,10 +233,10 @@
             </section>
 
           {:else if active === "workspace"}
-            <section class="settings-section box gap-2xs pad-y-xs">
-              <h3 class="text-xs weight-600 tt-u text-muted m-0 pad-y-2xs">Sidebars</h3>
-              <div class="settings-row row ycenter xbetween gap-sm pad-y-2xs">
-                <span class="settings-row-text box gap-3xs grow min0">
+            <section class="border-bottom box gap-2xs pad-y-xs">
+              <h3 class="text-xs weight-600 tt-u text-muted pad-y-2xs">Sidebars</h3>
+              <div class="row ycenter xbetween gap-sm pad-y-2xs">
+                <span class="box gap-3xs grow min0">
                   <span class="text-sm weight-500 text-primary">Reset sidebar widths</span>
                   <span class="text-xs text-muted">
                     {#if railsCleared >= 0}
@@ -169,58 +250,72 @@
               </div>
             </section>
 
-            <section class="settings-section box gap-2xs pad-y-xs">
-              <h3 class="text-xs weight-600 tt-u text-muted m-0 pad-y-2xs">Window</h3>
-              <label class="settings-row row ycenter xbetween gap-sm pad-y-2xs cursor-pointer">
-                <span class="settings-row-text box gap-3xs grow min0">
+            <section class="border-bottom box gap-2xs pad-y-xs">
+              <h3 class="text-xs weight-600 tt-u text-muted pad-y-2xs">Window</h3>
+              <label class="row ycenter xbetween gap-sm pad-y-2xs cursor-pointer">
+                <span class="box gap-3xs grow min0">
                   <span class="text-sm weight-500 text-primary">Close on Escape</span>
                   <span class="text-xs text-muted">Press ESC to close the current tab. The app quits after the last one.</span>
                 </span>
                 <input type="checkbox"
                   checked={$settings.closeOnEscape}
                   onchange={(e) => settings.update((s) => ({ ...s, closeOnEscape: e.currentTarget.checked }))}
-                  class="settings-switch shrink-0" />
+                  class="shrink-0" />
               </label>
             </section>
 
           {:else if active === "reading"}
-            <section class="settings-section box gap-2xs pad-y-xs">
-              <h3 class="text-xs weight-600 tt-u text-muted m-0 pad-y-2xs">Documents</h3>
-              <label class="settings-row row ycenter xbetween gap-sm pad-y-2xs cursor-pointer">
-                <span class="settings-row-text box gap-3xs grow min0">
+            <section class="border-bottom box gap-2xs pad-y-xs">
+              <h3 class="text-xs weight-600 tt-u text-muted pad-y-2xs">Documents</h3>
+              <label class="row ycenter xbetween gap-sm pad-y-2xs cursor-pointer">
+                <span class="box gap-3xs grow min0">
+                  <span class="text-sm weight-500 text-primary">Autosave</span>
+                  <span class="text-xs text-muted">
+                    Write edits to disk as you make them. Only applies to documents that already
+                    have a location — a new, pasted or fetched one still saves with
+                    <code class="kbd text-2xs">Cmd+S</code>. Pauses on a file that changed
+                    underneath your edit, and asks which version to keep.
+                  </span>
+                </span>
+                <input type="checkbox"
+                  checked={$settings.autosave}
+                  onchange={(e) => settings.update((s) => ({ ...s, autosave: e.currentTarget.checked }))}
+                  class="shrink-0" />
+              </label>
+              <label class="row ycenter xbetween gap-sm pad-y-2xs cursor-pointer">
+                <span class="box gap-3xs grow min0">
                   <span class="text-sm weight-500 text-primary">Auto-present Marp decks</span>
-                  <span class="text-xs text-muted">Open documents with <code class="kbd text-3xs">marp: true</code> frontmatter as a slideshow.</span>
+                  <span class="text-xs text-muted">Open documents with <code class="kbd text-2xs">marp: true</code> frontmatter as a slideshow.</span>
                 </span>
                 <input type="checkbox"
                   checked={$settings.autoPresentMarp}
                   onchange={(e) => settings.update((s) => ({ ...s, autoPresentMarp: e.currentTarget.checked }))}
-                  class="settings-switch shrink-0" />
+                  class="shrink-0" />
               </label>
             </section>
 
-            <section class="settings-section box gap-2xs pad-y-xs">
-              <h3 class="text-xs weight-600 tt-u text-muted m-0 pad-y-2xs">Editor</h3>
-              <label class="settings-row row ycenter xbetween gap-sm pad-y-2xs cursor-pointer">
-                <span class="settings-row-text box gap-3xs grow min0">
+            <section class="border-bottom box gap-2xs pad-y-xs">
+              <h3 class="text-xs weight-600 tt-u text-muted pad-y-2xs">Editor</h3>
+              <label class="row ycenter xbetween gap-sm pad-y-2xs cursor-pointer">
+                <span class="box gap-3xs grow min0">
                   <span class="text-sm weight-500 text-primary">Line numbers</span>
                   <span class="text-xs text-muted">Show a line-number gutter in the editor.</span>
                 </span>
                 <input type="checkbox"
                   checked={$settings.showLineNumbers}
                   onchange={(e) => settings.update((s) => ({ ...s, showLineNumbers: e.currentTarget.checked }))}
-                  class="settings-switch shrink-0" />
+                  class="shrink-0" />
               </label>
             </section>
 
           {:else if active === "ai"}
-            <section class="settings-section box gap-2xs pad-y-xs">
-              <h3 class="text-xs weight-600 tt-u text-muted m-0 pad-y-2xs">AI lookup</h3>
-              <p class="text-xs text-muted m-0">Right-click selected text in the viewer to send it to an AI tool. Manage providers and saved prompts below.</p>
+            <section class="border-bottom box gap-2xs pad-y-xs">
+              <h3 class="text-xs weight-600 tt-u text-muted pad-y-2xs">AI lookup</h3>
+              <p class="text-xs text-muted">Right-click selected text in the viewer to send it to an AI tool. Manage providers and saved prompts below.</p>
               <AILookupSettings />
             </section>
           {/if}
         </div>
       </div>
-    </div>
   </div>
-{/if}
+</dialog>

@@ -15,28 +15,28 @@
 	];
 </script>
 
-<aside class="observatory-sidebar border-right box gap-sm pad-sm scroll-y">
+<aside class="panel min0 border-right box gap-sm pad-sm scroll-y">
 	<!-- Project meta -->
 	<header class="box gap-3xs border-bottom pad-bottom-2xs">
-		<h2 class="text-md weight-700 m-0">{scan?.project?.name ?? projectsState.activeProject?.name ?? 'Project'}</h2>
+		<h2 class="text-md weight-700">{scan?.project?.name ?? projectsState.activeProject?.name ?? 'Project'}</h2>
 		{#if scan?.project?.tagline || projectsState.activeProject?.tagline}
-			<p class="text-xs text-muted m-0">{scan?.project?.tagline ?? projectsState.activeProject?.tagline}</p>
+			<p class="text-xs text-muted">{scan?.project?.tagline ?? projectsState.activeProject?.tagline}</p>
 		{/if}
 		{#if scan?.project?.date}
-			<span class="text-3xs text-muted">Scanned: {scan.project.date}</span>
+			<span class="text-2xs text-muted">Scanned: {scan.project.date}</span>
 		{/if}
 	</header>
 
 	<!-- Scan views -->
 	<section class="box gap-3xs">
-		<h3 class="text-xs weight-600 tt-u text-muted m-0">Views</h3>
+		<h3 class="text-xs weight-600 tt-u text-muted">Views</h3>
 		<nav class="box gap-3xs">
 			{#each SCAN_TABS as tab}
 				{@const isAvail = projectsState.activeProject?.scansAvailable?.includes(tab.id) ?? true}
 				<a
 					href="/observatory/{projectsState.activeProjectSlug}/{tab.id}"
-					class="sidebar-tab row ycenter gap-2xs pad-x-2xs pad-y-3xs radius-sm text-sm text-secondary"
-					class:sidebar-tab-active={projectsState.activeScanType === tab.id}
+					class="navtree-link gap-2xs"
+					class:active={projectsState.activeScanType === tab.id}
 					class:opacity-half={!isAvail}
 					aria-disabled={!isAvail}
 				>
@@ -50,7 +50,7 @@
 	<!-- Search (graph views only) -->
 	{#if scan?.scan !== 'health'}
 		<section class="box gap-2xs">
-			<h3 class="text-xs weight-600 tt-u text-muted m-0">Search</h3>
+			<h3 class="text-xs weight-600 tt-u text-muted">Search</h3>
 			<input
 				type="text"
 				placeholder="Search nodes & files..."
@@ -63,30 +63,30 @@
 	<!-- Metrics -->
 	{#if stats}
 		<section class="box gap-3xs">
-			<h3 class="text-xs weight-600 tt-u text-muted m-0">Metrics</h3>
+			<h3 class="text-xs weight-600 tt-u text-muted">Metrics</h3>
 			<div class="grid-2 gap-2xs">
 				{#if stats.loc !== undefined}
-					<div class="metric-tile card border pad-2xs">
-						<span class="metric-tile-num">{(stats.loc || 0).toLocaleString()}</span>
-						<span class="metric-tile-lbl">LOC</span>
+					<div class="panel pad-y-2xs pad-x-sm card border pad-2xs">
+						<span class="mono text-lg tabular-nums text-primary lh12">{(stats.loc || 0).toLocaleString()}</span>
+						<span class="mono text-xs tt-u tracking-wider text-muted">LOC</span>
 					</div>
 				{/if}
 				{#if stats.files !== undefined}
-					<div class="metric-tile card border pad-2xs">
-						<span class="metric-tile-num">{stats.files}</span>
-						<span class="metric-tile-lbl">Files</span>
+					<div class="panel pad-y-2xs pad-x-sm card border pad-2xs">
+						<span class="mono text-lg tabular-nums text-primary lh12">{stats.files}</span>
+						<span class="mono text-xs tt-u tracking-wider text-muted">Files</span>
 					</div>
 				{/if}
 				{#if stats.authoredClasses !== undefined}
-					<div class="metric-tile card border pad-2xs">
-						<span class="metric-tile-num">{stats.authoredClasses}</span>
-						<span class="metric-tile-lbl">CSS Classes</span>
+					<div class="panel pad-y-2xs pad-x-sm card border pad-2xs">
+						<span class="mono text-lg tabular-nums text-primary lh12">{stats.authoredClasses}</span>
+						<span class="mono text-xs tt-u tracking-wider text-muted">CSS Classes</span>
 					</div>
 				{/if}
 				{#if stats.designTokens !== undefined}
-					<div class="metric-tile card border pad-2xs">
-						<span class="metric-tile-num">{stats.designTokens}</span>
-						<span class="metric-tile-lbl">Tokens</span>
+					<div class="panel pad-y-2xs pad-x-sm card border pad-2xs">
+						<span class="mono text-lg tabular-nums text-primary lh12">{stats.designTokens}</span>
+						<span class="mono text-xs tt-u tracking-wider text-muted">Tokens</span>
 					</div>
 				{/if}
 			</div>
@@ -96,12 +96,12 @@
 	<!-- Flows list -->
 	{#if flows.length > 0}
 		<section class="box gap-3xs">
-			<h3 class="text-xs weight-600 tt-u text-muted m-0">User Flows ({flows.length})</h3>
+			<h3 class="text-xs weight-600 tt-u text-muted">User Flows ({flows.length})</h3>
 			<div class="box gap-3xs">
 				{#each flows as flow}
 					<button
-						class="sidebar-tab row ycenter gap-2xs pad-x-2xs pad-y-3xs radius-sm text-sm text-secondary wfull text-left cursor-pointer"
-						class:sidebar-tab-active={graphState.activeFlowId === flow.id}
+						class="navtree-link gap-2xs wfull ta-l cursor-pointer"
+						class:active={graphState.activeFlowId === flow.id}
 						onclick={() => graphState.pickFlow(graphState.activeFlowId === flow.id ? null : flow)}
 					>
 						<span class="text-muted shrink-0">▶</span>
@@ -115,10 +115,10 @@
 	<!-- Notes -->
 	{#if notes.length > 0}
 		<section class="box gap-3xs">
-			<button class="row ycenter xbetween gap-2xs pad-x-2xs pad-y-3xs wfull cursor-pointer bg-transparent border-0" onclick={() => graphState.toggleNotes()}>
+			<button class="row ycenter xbetween gap-2xs pad-x-2xs pad-y-3xs wfull cursor-pointer blank" onclick={() => graphState.toggleNotes()}>
 				<span class="row ycenter gap-2xs text-xs weight-600 tt-u text-muted">
 					<span>📝 Structural Notes</span>
-					<span class="badge text-3xs" class:badge-danger={notes.some((n: any) => n.severity === 'alert')}>
+					<span class="badge text-2xs" class:border-danger={notes.some((n: any) => n.severity === 'alert')}>
 						{notes.length}
 					</span>
 				</span>
@@ -130,12 +130,12 @@
 					{#each notes as note}
 						<div class="card border pad-2xs box gap-3xs">
 							<header class="row ycenter gap-2xs">
-								<span class="badge text-3xs" class:badge-danger={note.severity === 'alert'} class:badge-warn={note.severity === 'warn'}>
+								<span class="badge text-2xs" class:border-danger={note.severity === 'alert'} class:border-warning={note.severity === 'warn'}>
 									{note.severity}
 								</span>
 								<strong class="text-xs weight-600">{note.title}</strong>
 							</header>
-							<p class="text-xs text-secondary m-0">{note.body}</p>
+							<p class="text-xs text-secondary">{note.body}</p>
 						</div>
 					{/each}
 				</div>

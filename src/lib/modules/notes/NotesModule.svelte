@@ -1,15 +1,15 @@
 <script lang="ts">
 	import { onMount, tick } from "svelte";
 	import { document as docStore } from "$lib/stores/document";
-	import { tabStore, HOME_TAB_ID, type Tab } from "$lib/stores/tabs";
+	import { draftOf, tabStore, HOME_TAB_ID, type Tab } from "$lib/stores/tabs";
 	import {
 		initRenderer,
 		renderFull,
 		resolveLocalPath,
 		isMarpDoc,
 	} from "$lib/renderer/pipeline";
-	import { Icon } from 'fractalicons';
-	import { luBookOpen, luFilePlus, luFolderOpen, luPin, luX } from 'fractalicons/lucide';
+	import { Icon } from 'fractalicons'
+	import { phSelectionPlus, phPlusSquare, phFolderOpen, phArrowSquareLeft, phFilePlus } from 'fractalicons/phosphor'
 	import {
 		allowAssets,
 		getBaseDir,
@@ -18,16 +18,24 @@
 		openFileDialog,
 		openWithSystem,
 		pathExists,
+		reloadCurrentFile,
 		saveAsNewDocument,
 		saveFile,
+		writeDraft,
 	} from "$lib/tauri/files";
+	import {
+		autosaveStatus,
+		cancelAutosave,
+		flushAutosave,
+		scheduleAutosave,
+	} from "$lib/notes/autosave";
 	import { showToast } from "$lib/stores/toast";
 	import { settings, getContentMaxWidth } from "$lib/stores/settings";
 	import { startFileWatcher } from "$lib/tauri/watcher";
 	import { getCurrentWindow } from "@tauri-apps/api/window";
 	import { invoke } from "@tauri-apps/api/core";
 	import { tocVisible, tocEntries } from "$lib/stores/toc";
-	import { notesState } from "$lib/states/notesState.svelte";
+	import { notesState, type NotesMode } from "$lib/states/notesState.svelte";
 	import { appState } from "$lib/states/appState.svelte";
 	import MarkdownRenderer from "$lib/components/MarkdownRenderer.svelte";
 	import DropZone from "$lib/components/DropZone.svelte";
@@ -35,6 +43,8 @@
 	import TableOfContents from "$lib/components/TableOfContents.svelte";
 	import Rail from "$lib/components/Rail.svelte";
 	import TabBar from "$lib/components/TabBar.svelte";
+	import NotesHeaderActions from "$lib/components/NotesHeaderActions.svelte";
+	import SurfaceActions from "$lib/components/SurfaceActions.svelte";
 	import SearchOverlay from "$lib/components/SearchOverlay.svelte";
 	import PasteModal from "$lib/components/PasteModal.svelte";
 	import OpenDialog from "$lib/components/OpenDialog.svelte";
@@ -50,6 +60,8 @@
 	import ImageLightbox from "$lib/components/ImageLightbox.svelte";
 	import Toast from "$lib/components/Toast.svelte";
 	import Editor from "$lib/components/Editor.svelte";
+	import RichTextEditor from "$lib/components/RichTextEditor.svelte";
+	import DocumentTitle from "$lib/components/DocumentTitle.svelte";
 	import PresentationView from "$lib/components/PresentationView.svelte";
 	import KnowledgeLibrary from "$lib/components/KnowledgeLibrary.svelte";
 	import { updateScrollPercent } from "$lib/stores/recents";
@@ -75,9 +87,7 @@
 	// Split mode (#19): editor + live preview side by side. Both Split and Edit
 	// are "editing" states (activeTab.isEditing true); splitMode just adds the
 	// preview pane, so save / dirty / editContent all keep working unchanged.
-	let splitMode = $state(false);
-	let splitPreviewHtml = $state("");
-	let splitPreviewTimer: ReturnType<typeof setTimeout> | undefined;
+	let richMode = $state(false);
 	let contentMaxWidth = $derived(getContentMaxWidth($settings));
 
 	function setNativeWindowTitle(title: string) {
@@ -223,28 +233,26 @@
 			!activeTab.filePath.startsWith("url://"),
 	);
 	let currentMode = $derived<ViewMode>(
-		activeTab?.isEditing ? "editor" : rawMode ? "raw" : "viewer",
+		activeTab?.isEditing
+			? richMode
+				? "rich"
+				: "editor"
+			: rawMode
+				? "raw"
+				: "viewer",
 	);
-	// Which segment of the View/Split/Edit control is active.
-	let activeEditMode = $derived<"view" | "split" | "edit">(
-		activeTab?.isEditing ? (splitMode ? "split" : "edit") : "view",
+	// Which segment of the Read / Rich Text / Raw control is active. Raw covers
+	// two internal modes: the editable source for a local file, and the
+	// read-only source for a document that has no file to write back to.
+	let activeMode = $derived<NotesMode>(
+		activeTab?.isEditing
+			? richMode
+				? "rich"
+				: "raw"
+			: rawMode
+				? "raw"
+				: "read",
 	);
-
-	// Live-render the editor content into the split preview pane, debounced so
-	// fast typing stays smooth. ponytail: full re-render per debounce tick; fine
-	// for typical docs — add incremental rendering only if a huge file lags.
-	$effect(() => {
-		if (!splitMode || !activeTab?.isEditing) return;
-		const content = activeTab.editContent;
-		const baseDir = getBaseDir(activeTab.filePath);
-		clearTimeout(splitPreviewTimer);
-		splitPreviewTimer = setTimeout(() => {
-			const result = renderFull(content, baseDir);
-			allowAssets(result.assetPaths);
-			splitPreviewHtml = result.html;
-		}, 120);
-		return () => clearTimeout(splitPreviewTimer);
-	});
 
 	// Marp presentation (#44). `presenting` is a page-level view mode (like rawMode);
 	// it's only meaningful when the active doc is a Marp deck.
@@ -257,9 +265,9 @@
 	function togglePresent() {
 		presenting = !presenting;
 		if (presenting) {
-			// Entering the slideshow supersedes raw/edit/split.
+			// Entering the slideshow supersedes every editing mode.
 			rawMode = false;
-			splitMode = false;
+			richMode = false;
 			if (activeTab?.isEditing) tabStore.setEditing(activeTab.id, false);
 		}
 	}
@@ -270,7 +278,7 @@
 	 */
 	function switchMode(target: ViewMode) {
 		if (!activeTab || target === currentMode) return;
-		if (target === "editor" && !canEditActive) return;
+		if ((target === "editor" || target === "rich") && !canEditActive) return;
 
 		// An explicit mode switch (raw/edit) leaves the slideshow (#44).
 		presenting = false;
@@ -283,36 +291,29 @@
 		const line = getCurrentSourceLine(currentMode);
 
 		// Apply state changes for the target mode
-		if (target === "editor") {
+		if (target === "editor" || target === "rich") {
+			richMode = target === "rich";
 			tabStore.setEditing(activeTab.id, true);
 		} else {
 			// Exiting edit mode: re-render `editContent` (in-memory) so the viewer
 			// shows the latest unsaved changes immediately. The dirty indicator
 			// continues to mark that the changes aren't on disk yet.
 			if (activeTab.isEditing && activeTab.dirty) {
-				const baseDir = getBaseDir(activeTab.filePath);
-				const result = renderFull(activeTab.editContent, baseDir);
-				// Fire-and-forget: referenced images were almost always allowed at open;
-				// a brand-new external image typed mid-edit self-heals on the next
-				// render/reload. Not worth making this sync path async (#31).
-				allowAssets(result.assetPaths);
-				// Update the rendered HTML in the docStore so the viewer reflects
-				// the unsaved edits. We do NOT call tabStore.updateTabContent or
-				// markSaved — the source on disk is unchanged, dirty stays true.
-				docStore.set({
-					filePath: activeTab.filePath,
-					fileName: activeTab.fileName,
-					content: activeTab.content, // disk content (unchanged)
-					renderedHtml: result.html, // preview of unsaved edits
-					frontmatter: result.frontmatter,
-					wordCount: result.wordCount,
-					loading: false,
-					error: null,
-				});
+				// The viewer renders the draft as soon as the tab stops editing, so
+				// nothing has to be pushed anywhere for the preview to appear. What
+				// still has to happen is asset whitelisting: an image referenced for
+				// the first time mid-edit was never allowed at open.
+				//
+				// Fire-and-forget — a brand-new external image self-heals on the next
+				// render or reload, and this path must stay synchronous (#31).
+				allowAssets(renderFull(draftOf(activeTab), activeTab.baseDir).assetPaths);
 			}
 			if (activeTab.isEditing) tabStore.setEditing(activeTab.id, false);
+			// Stepping out of the editor is a deliberate pause; commit now rather
+			// than after the debounce.
+			void flushAutosave();
 			rawMode = target === "raw";
-			splitMode = false; // leaving editing always leaves split
+			richMode = false;
 		}
 
 		// Scroll the destination after it renders. Two rAFs are needed for the
@@ -325,47 +326,70 @@
 		});
 	}
 
+	/**
+	 * An explicit save (Cmd+S).
+	 *
+	 * The only thing it does that autosave cannot is choose a location for a
+	 * document that has none. Once there is a path, both go through the same
+	 * `writeDraft`, so an explicit save and a background one cannot write
+	 * different things.
+	 */
 	async function handleSave(tab: Tab) {
 		if (!tab.dirty) return;
+		// A conflicted file needs an answer before anything writes over it.
+		if (tab.conflict) return;
+		cancelAutosave(tab.id);
 		try {
-			let targetPath = tab.filePath;
-			let targetName = tab.fileName;
 			// An unsaved `new://` document has no location yet — prompt for one on
 			// this first save, which rebinds the tab to the chosen real path (#63).
 			if (tab.filePath.startsWith("new://")) {
-				const saved = await saveAsNewDocument(tab.id, tab.editContent);
+				const saved = await saveAsNewDocument(tab.id, draftOf(tab));
 				if (!saved) return; // cancelled — keep editing, stays dirty
-				targetPath = saved;
-				targetName = saved.split("/").pop() ?? saved;
-			} else {
-				await saveFile(tab.filePath, tab.editContent);
+				// Re-read: saveAsNewDocument rebound the tab to its real path.
+				const rebound = $tabs.find((t) => t.id === tab.id);
+				if (rebound) await writeDraft(rebound);
+				return;
 			}
-			const baseDir = getBaseDir(targetPath);
-			const result = renderFull(tab.editContent, baseDir);
-			await allowAssets(result.assetPaths);
-			tabStore.markSaved(tab.id);
-			tabStore.updateTabContent(
-				targetPath,
-				tab.editContent,
-				result.html,
-				result.frontmatter,
-				result.wordCount,
-			);
-			// Sync docStore so the rendered view reflects the saved content immediately
-			// when the user toggles out of edit mode (the tab-sync $effect only fires on
-			// active-tab change, not on content updates of the same tab).
-			docStore.set({
-				filePath: targetPath,
-				fileName: targetName,
-				content: tab.editContent,
-				renderedHtml: result.html,
-				frontmatter: result.frontmatter,
-				wordCount: result.wordCount,
-				loading: false,
-				error: null,
-			});
+			await writeDraft(tab);
 		} catch (err) {
 			console.error("Save failed:", err);
+			alert(`Save failed: ${err}`);
+		}
+	}
+
+	// Autosave reports on one document at a time. Showing its state against any
+	// other tab would attribute one file's failure to a different file.
+	const activeSaveState = $derived(
+		activeTab && $autosaveStatus.filePath === activeTab.filePath
+			? $autosaveStatus.state
+			: 'idle'
+	);
+
+	/**
+	 * The draft changed. Autosave decides whether that reaches disk — it is off
+	 * for documents with no location, and paused while a file is conflicted.
+	 */
+	function handleDraftChange(id: string, value: string) {
+		tabStore.updateEditContent(id, value);
+		scheduleAutosave(id);
+	}
+
+	/** Take the version on disk, discarding the unsaved draft. */
+	async function acceptDiskVersion(tab: Tab) {
+		cancelAutosave(tab.id);
+		tabStore.updateEditContent(tab.id, tab.conflict!.diskContent);
+		tabStore.markSaved(tab.id);
+		tabStore.clearConflict(tab.id);
+		await reloadCurrentFile(tab.filePath);
+	}
+
+	/** Keep the draft and write it over the version on disk. */
+	async function keepMyVersion(tab: Tab) {
+		tabStore.clearConflict(tab.id);
+		try {
+			const fresh = $tabs.find((t) => t.id === tab.id);
+			if (fresh) await writeDraft(fresh);
+		} catch (err) {
 			alert(`Save failed: ${err}`);
 		}
 	}
@@ -479,32 +503,40 @@
 	// View / Split / Edit segmented control (#19). Split & Edit are both editing
 	// states; splitMode is the only difference. Routed through switchMode so the
 	// source-line position is preserved across the change.
-	function setMode(target: "view" | "split" | "edit") {
+	/**
+	 * Read / Rich Text / Raw.
+	 *
+	 * Raw resolves to whichever source view the document can support: the
+	 * editable textarea for a local file, the read-only <pre> for a pasted or
+	 * fetched document that has nowhere to save back to. That is what lets the
+	 * segment stay available on every document, and what let the separate
+	 * source-view toolbar button go away.
+	 */
+	function setMode(target: NotesMode) {
 		if (!activeTab) return;
-		if (target === "view") {
-			splitMode = false;
-			switchMode(rawMode ? "raw" : "viewer");
+		if (target === "read") {
+			switchMode("viewer");
 			return;
 		}
-		if (!canEditActive) return;
-		if (target === "edit") {
-			splitMode = false;
-			switchMode("editor");
-		} else {
-			switchMode("editor");
-			splitMode = true;
+		if (target === "rich") {
+			if (!canEditActive) return;
+			switchMode("rich");
+			return;
 		}
+		switchMode(canEditActive ? "editor" : "raw");
 	}
 
 	function handleEditToggle() {
 		if (!canEditActive || !activeTab) return;
-		// Cmd+E toggles full Edit against View (never Split).
-		setMode(activeTab.isEditing ? "view" : "edit");
+		// Cmd+E toggles editing against reading, returning to whichever editor
+		// was last used.
+		setMode(activeTab.isEditing ? "read" : richMode ? "rich" : "raw");
 	}
 
-	function handleRawToggle() {
-		if (activeTab?.isEditing) return;
-		switchMode(rawMode ? "viewer" : "raw");
+	// Cmd+U goes straight to the markdown source, from wherever you are.
+	function handleSourceToggle() {
+		if (!activeTab) return;
+		setMode(activeMode === "raw" ? "read" : "raw");
 	}
 
 	async function handleCloseTab(id: string): Promise<boolean> {
@@ -589,6 +621,9 @@
 		// (Discard, no dirty tabs, or dialog failure) we quit via quit_app — a hard
 		// exit, so we never trap the user in an app that can't close.
 		(window as any).__fracta_quit = async () => {
+			// Land anything autosave was still holding, so the prompt below asks
+			// only about edits that genuinely have nowhere to go.
+			await flushAutosave();
 			const dirty = $tabs.filter((t) => t.dirty);
 			if (dirty.length > 0) {
 				try {
@@ -902,7 +937,7 @@
 		// Cmd+U raw toggle (disabled in edit mode)
 		if ((e.metaKey || e.ctrlKey) && e.key === "u") {
 			e.preventDefault();
-			handleRawToggle();
+			handleSourceToggle();
 			return;
 		}
 
@@ -1049,10 +1084,11 @@
 		if (id === prevTabId) return;
 
 		// Save reading progress for the tab we're leaving.
-		// At this point in the $effect, $activeTabId has changed but the DOM still
-		// shows the previous tab's content (docStore.set happens below), so
-		// getCurrentSourceLine reads the correct article elements. We flush the
-		// debounce to ensure nothing is lost on rapid tab switches.
+		// At this point in the $effect, $activeTabId has changed but the DOM has
+		// not been patched yet — Svelte flushes after effects — so
+		// getCurrentSourceLine still reads the previous tab's article elements,
+		// which is exactly what we want to record. We flush the debounce to
+		// ensure nothing is lost on rapid tab switches.
 		if (prevTabId && prevTabId !== HOME_TAB_ID) {
 			const prevTab = allTabs.find((t) => t.id === prevTabId);
 			if (
@@ -1070,22 +1106,16 @@
 			}
 		}
 
+		// Leaving a document: write whatever it was still holding rather than
+		// letting a debounce outlive the view it belongs to.
+		void flushAutosave();
+
 		prevTabId = id;
 
 		if (!id || id === HOME_TAB_ID) {
 			rawMode = false;
 			presenting = false;
-			splitMode = false;
-			docStore.set({
-				filePath: null,
-				fileName: null,
-				content: "",
-				renderedHtml: "",
-				frontmatter: null,
-				wordCount: 0,
-				loading: false,
-				error: null,
-			});
+			richMode = false;
 			tocVisible.set(false);
 			tocEntries.set([]);
 			setNativeWindowTitle("Fracta Knowledge");
@@ -1094,17 +1124,6 @@
 
 		const tab = allTabs.find((t) => t.id === id);
 		if (!tab) return;
-
-		docStore.set({
-			filePath: tab.filePath,
-			fileName: tab.fileName,
-			content: tab.content,
-			renderedHtml: tab.renderedHtml,
-			frontmatter: tab.frontmatter,
-			wordCount: tab.wordCount,
-			loading: false,
-			error: null,
-		});
 
 		// Auto-present a Marp deck on activation when the setting is on and we're not
 		// mid-edit (#44). Runs once per tab switch, so an explicit exit (Esc) sticks.
@@ -1147,7 +1166,6 @@
 			if (activeTab) void handleSave(activeTab);
 		};
 		notesState.onSetModeCallback = setMode;
-		notesState.onRawToggleCallback = handleRawToggle;
 		notesState.onTogglePresentCallback = togglePresent;
 	});
 
@@ -1156,7 +1174,7 @@
 	});
 
 	$effect(() => {
-		notesState.splitMode = splitMode;
+		notesState.richMode = richMode;
 	});
 
 	$effect(() => {
@@ -1168,73 +1186,228 @@
   .page-split's fixed sidebar track is replaced by a Rail, so the library can be
   resized and collapsed like every other sidebar in the app.
 -->
-<div class="row wfull grow min0">
-	<Rail id="notes-library" side="left" label="Library" initial={260} min={200} max={480}>
-		<KnowledgeLibrary/>
+<div class="row wfull grow min0 hfull">
+	<Rail
+		id="notes-library"
+		side="left"
+		label="Library"
+		initial={260}
+		min={200}
+		max={480}
+	>
+		<KnowledgeLibrary />
 	</Rail>
-
-	<section class="page-main">
+	<section class="page-main grow">
 		{#if !zenMode}
 			<ProgressBar />
-			<TabBar onCloseTab={handleCloseTab} />
 		{/if}
+		<!--
+		  Notes' entire chrome, rendered in the app header. It used to sit in a
+		  second bar directly beneath, which cost a full row of height to repeat
+		  a strip the header already had room for.
+		-->
+		<SurfaceActions>
+			{#if !zenMode}
+				<TabBar onCloseTab={handleCloseTab} />
+				{#if activeTab}
+					<div class="row ycenter gap-3xs shrink-0">
+						<NotesHeaderActions />
+					</div>
+				{/if}
+			{/if}
+			<div class="row ycenter gap-sm shrink-0">
+	<button class="button is-icon solid tip" class:bg={$activeTabId === HOME_TAB_ID}
+		onclick={() => tabStore.goHome()} aria-label="Home" data-tip="Home">
+			<Icon icon={phArrowSquareLeft} size={18}/>
+	</button>
+				<button
+					class="button is-icon solid tip"
+					onclick={() => notesState.newDoc()}
+					data-tip="New document"
+					aria-label="New document"
+				>
+					<Icon icon={phFilePlus} size={17} />
+				</button>
+				<button
+					class="button is-icon solid tip"
+					onclick={() => (openVisible = true)}
+					data-tip="Open a file"
+					aria-label="Open a file">
+					<Icon icon={phFolderOpen} size={17}/>
+				</button
+				>
+				<button
+					class="button is-icon solid tip"
+					onclick={() => {
+						pasteDefaultMode = "paste";
+						pasteVisible = true;
+					}}
+					data-tip="Paste markdown"
+					aria-label="Paste markdown">
+						<Icon icon={phPlusSquare} size={17}/>
+					</button
+				>
+				<button
+					class="button is-icon solid tip tip-end"
+					onclick={() => {
+						pasteDefaultMode = "url";
+						pasteVisible = true;
+					}}
+					data-tip="Open a URL"
+					aria-label="Open a URL">
+						<Icon icon={phSelectionPlus} size={17}/>
+					</button
+				>
+			</div>
+		</SurfaceActions>
 
 		<DropZone />
-
-
 		<SearchOverlay bind:visible={searchVisible} />
-		<PasteModal bind:visible={pasteVisible} defaultMode={pasteDefaultMode} />
+		<PasteModal
+			bind:visible={pasteVisible}
+			defaultMode={pasteDefaultMode}
+		/>
 		<OpenDialog bind:visible={openVisible} />
-		<CustomPromptModal bind:visible={customPromptVisible} selection={customPromptSelection} />
-
-			<!--
+		<CustomPromptModal
+			bind:visible={customPromptVisible}
+			selection={customPromptSelection}
+		/>
+		<!--
 			  Content and its table of contents are siblings in a row. The TOC used to
 			  be a fixed overlay that content had to dodge with .toc-spaced; it is a
 			  real rail now, so nothing needs pushing out of its way.
 			-->
-			<div class="row grow min0">
-		{#if !rendererReady}
-			<div class="box ycenter xcenter gap-sm pad-lg">
-				<p class="text-muted">Loading renderer…</p>
-			</div>
-		{:else if $docStore.loading}
-			<div class="box ycenter xcenter gap-sm pad-lg">
-				<p class="text-muted">Opening file…</p>
-			</div>
-		{:else if $docStore.error}
-			<div class="box ycenter xcenter gap-sm pad-lg">
-				<div class="card border pad-sm row ycenter gap-xs error-card">
-					<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" class="text-danger shrink-0">
-						<circle cx="12" cy="12" r="10" />
-						<line x1="12" y1="8" x2="12" y2="12" />
-						<line x1="12" y1="16" x2="12.01" y2="16" />
-					</svg>
-					<p class="text-danger text-sm m-0 grow min0">{$docStore.error}</p>
+		<div class="row grow min0">
+			{#if !rendererReady}
+				<div class="box ycenter xcenter gap-sm pad-lg">
+					<p class="text-muted">Loading renderer…</p>
 				</div>
-			</div>
-		{:else if $docStore.filePath}
-			{#if presenting && activeIsMarp}
-				<PresentationView
-					content={$docStore.content}
-					baseDir={activeTab ? getBaseDir(activeTab.filePath) : ""}
-					paginate={activePaginate}
-					onExit={() => (presenting = false)}
-					onLocalLink={handleLocalLink}
-				/>
-			{:else if activeTab?.isEditing && splitMode}
-				<div class="edit-split">
-					<Editor
-						value={activeTab.editContent}
-						onChange={(v) => tabStore.updateEditContent(activeTab!.id, v)}
-						fontSize={$settings.fontSize}
-						lineHeight={$settings.lineHeight}
-						maxWidth="100%"
-						showLineNumbers={$settings.showLineNumbers}
-						split
+			{:else if $docStore.loading}
+				<div class="box ycenter xcenter gap-sm pad-lg">
+					<p class="text-muted">Opening file…</p>
+				</div>
+			{:else if $docStore.error}
+				<div class="box ycenter xcenter gap-sm pad-lg">
+					<div
+						class="card border pad-sm row ycenter gap-xs error-card"
+					>
+						<svg
+							width="22"
+							height="22"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="1.6"
+							stroke-linecap="round"
+							class="text-danger shrink-0"
+						>
+							<circle cx="12" cy="12" r="10" />
+							<line x1="12" y1="8" x2="12" y2="12" />
+							<line x1="12" y1="16" x2="12.01" y2="16" />
+						</svg>
+						<p class="text-danger text-sm grow min0">
+							{$docStore.error}
+						</p>
+					</div>
+				</div>
+			{:else if $docStore.filePath}
+				{#if activeTab?.conflict}
+					<!--
+					  Two versions of this file exist and the app cannot know which
+					  one is wanted, so it shows both counts and stops writing until
+					  the user says. Nothing is merged and nothing is chosen for them.
+					-->
+					<div class="card border error-card box gap-2xs pad-sm" role="alert">
+						<span class="text-sm weight-600">
+							{activeTab.fileName} changed on disk while you were editing
+						</span>
+						<span class="text-xs text-muted">
+							Your unsaved version is {draftOf(activeTab).length.toLocaleString()} characters;
+							the one on disk is {activeTab.conflict.diskContent.length.toLocaleString()}.
+							Autosave is paused for this file until you choose.
+						</span>
+						<div class="row ycenter gap-xs">
+							<button class="button small" onclick={() => keepMyVersion(activeTab!)}>
+								Keep mine and overwrite the file
+							</button>
+							<button class="button small ghost" onclick={() => acceptDiskVersion(activeTab!)}>
+								Discard mine and load the file
+							</button>
+						</div>
+					</div>
+				{/if}
+				{#if presenting && activeIsMarp}
+					<PresentationView
+						content={$docStore.content}
+						baseDir={activeTab
+							? getBaseDir(activeTab.filePath)
+							: ""}
+						paginate={activePaginate}
+						onExit={() => (presenting = false)}
+						onLocalLink={handleLocalLink}
 					/>
-					<main class="split-preview">
+				{:else if activeTab?.isEditing && richMode}
+					<div class="grow min0 box">
+						<DocumentTitle
+							fileName={activeTab.fileName}
+							dirty={activeTab.dirty}
+							saveState={activeSaveState}
+							saveError={$autosaveStatus.error}
+							maxWidth={contentMaxWidth}
+						/>
+						<!--
+						  Keyed on the tab so switching documents builds a new
+						  editor rather than pushing a different file into the
+						  live ProseMirror document.
+						-->
+						{#key activeTab.id}
+							<RichTextEditor
+								value={draftOf(activeTab)}
+								onChange={(v) => handleDraftChange(activeTab!.id, v)}
+								maxWidth={contentMaxWidth}
+							/>
+						{/key}
+					</div>
+				{:else if activeTab?.isEditing}
+					<div class="grow min0 box">
+						<DocumentTitle
+							fileName={activeTab.fileName}
+							dirty={activeTab.dirty}
+							saveState={activeSaveState}
+							saveError={$autosaveStatus.error}
+							maxWidth={contentMaxWidth}
+						/>
+						<Editor
+							value={draftOf(activeTab)}
+							onChange={(v) => handleDraftChange(activeTab!.id, v)}
+							fontSize={$settings.fontSize}
+							lineHeight={$settings.lineHeight}
+							maxWidth={contentMaxWidth}
+							showLineNumbers={$settings.showLineNumbers}
+						/>
+					</div>
+				{:else if rawMode}
+					<main class="grow min0 scroll-y pad-y-md box">
+						{#if activeTab}
+							<DocumentTitle
+								fileName={activeTab.fileName}
+								dirty={activeTab.dirty}
+								saveState={activeSaveState}
+								saveError={$autosaveStatus.error}
+								maxWidth={contentMaxWidth}
+							/>
+						{/if}
+						<pre
+							class="raw-source"
+							style="--raw-font-size: {$settings.fontSize}px; --raw-line-height: {$settings.lineHeight}; --raw-max-width: {contentMaxWidth};"><code
+								>{$docStore.content}</code
+							></pre>
+					</main>
+				{:else}
+					<main class="grow min0 scroll-y pad-y-md">
+						<FrontmatterBar />
 						<MarkdownRenderer
-							html={splitPreviewHtml}
+							html={$docStore.renderedHtml}
 							onImageClick={(src, all, idx) => {
 								lightboxImages = all;
 								lightboxIndex = idx;
@@ -1243,62 +1416,41 @@
 							onLocalLink={handleLocalLink}
 						/>
 					</main>
-				</div>
-			{:else if activeTab?.isEditing}
-				<div class="edit-full">
-					<Editor
-						value={activeTab.editContent}
-						onChange={(v) => tabStore.updateEditContent(activeTab!.id, v)}
-						fontSize={$settings.fontSize}
-						lineHeight={$settings.lineHeight}
-						maxWidth={contentMaxWidth}
-						showLineNumbers={$settings.showLineNumbers}
-					/>
-				</div>
-			{:else if rawMode}
-				<main class="content-main">
-					<pre class="raw-source"
-						style="--raw-font-size: {$settings.fontSize}px; --raw-line-height: {$settings.lineHeight}; --raw-max-width: {contentMaxWidth};"
-					><code>{$docStore.content}</code></pre>
-				</main>
+				{/if}
+
+				<ImageLightbox
+					bind:visible={lightboxVisible}
+					src=""
+					images={lightboxImages}
+					bind:index={lightboxIndex}
+				/>
 			{:else}
-				<main class="content-main">
-					<FrontmatterBar />
-					<MarkdownRenderer
-						html={$docStore.renderedHtml}
-						onImageClick={(src, all, idx) => {
-							lightboxImages = all;
-							lightboxIndex = idx;
-							lightboxVisible = true;
-						}}
-						onLocalLink={handleLocalLink}
-					/>
-				</main>
+				<EmptyState
+					onOpenUrl={() => {
+						pasteDefaultMode = "url";
+						pasteVisible = true;
+					}}
+				/>
 			{/if}
 
-			{#if !zenMode && !activeTab?.isEditing && !presenting}
-				<StatusBar />
-				<ScrollToTop />
-			{/if}
-
-			<ImageLightbox
-				bind:visible={lightboxVisible}
-				src=""
-				images={lightboxImages}
-				bind:index={lightboxIndex}
-			/>
-		{:else}
-			<EmptyState
-				onOpenUrl={() => { pasteDefaultMode = "url"; pasteVisible = true; }}
-			/>
-		{/if}
-
-			{#if !zenMode && !activeTab?.isEditing}
-				<Rail id="notes-toc" side="right" label="On this page" initial={240} min={180} max={400}>
+			{#if !zenMode && !activeTab?.isEditing && $tocVisible && $tocEntries.length > 0}
+				<Rail
+					id="notes-toc"
+					side="right"
+					label="On this page"
+					initial={240}
+					min={180}
+					max={400}
+				>
 					<TableOfContents />
 				</Rail>
 			{/if}
-			</div>
+		</div>
+
+		{#if !zenMode && !activeTab?.isEditing && !presenting}
+			<StatusBar />
+			<ScrollToTop />
+		{/if}
 
 		<Toast />
 	</section>

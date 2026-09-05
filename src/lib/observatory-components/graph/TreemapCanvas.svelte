@@ -132,21 +132,21 @@
 	}
 </script>
 
-<div class="treemap-canvas box gap-3xs pad-sm">
+<div class="grow relative h-192 box gap-3xs pad-sm">
 	<!-- Legend -->
 	<header class="row ycenter xbetween pad-y-2xs text-xs text-secondary">
 		<span class="weight-600">Churn × Complexity Heatmap</span>
-		<div class="row ycenter gap-2xs text-3xs">
+		<div class="row ycenter gap-2xs text-2xs">
 			<span class="treemap-legend-label">Low Risk</span>
-			<div class="treemap-legend-bar"></div>
+			<div class="h-6 radius-32"></div>
 			<span class="treemap-legend-label">High Risk</span>
 		</div>
 	</header>
 
-	<svg viewBox="0 0 {W} {H}" class="treemap-svg wfull grow min0">
+	<svg viewBox="0 0 {W} {H}" class="hfull wfull grow min0">
 		{#each boxes as b}
 			{#if b.type === 'group'}
-				<g class="treemap-group">
+				<g class="cursor-pointer">
 					<rect x={b.x} y={b.y} width={b.w} height={b.h} class="treemap-group-box" />
 					<text x={b.x + 4} y={b.y + 12} class="treemap-group-label">{b.key}</text>
 				</g>
@@ -154,7 +154,7 @@
 				{@const isMatch = query && b.path.toLowerCase().includes(query.toLowerCase())}
 				{@const isSel = selected?.path === b.path}
 				<g
-					class="treemap-file {tierClass(b.risk ?? 0)}"
+					class="cursor-pointer {tierClass(b.risk ?? 0)}"
 					class:treemap-match={isMatch}
 					class:treemap-selected={isSel}
 					role="button"

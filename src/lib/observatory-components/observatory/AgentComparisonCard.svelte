@@ -5,8 +5,8 @@
 
 <section class="box gap-md pad-md" aria-labelledby="agent-comparison-title">
 	<header class="box gap-3xs">
-		<h3 id="agent-comparison-title" class="text-sm weight-600 m-0">Agent comparison</h3>
-		<p class="muted text-xs m-0">Canonical quality signals by agent.</p>
+		<h3 id="agent-comparison-title" class="text-sm weight-600">Agent comparison</h3>
+		<p class="text-muted text-xs">Canonical quality signals by agent.</p>
 	</header>
 	<div class="card border overflow-hidden">
 		<table class="table-clean">
@@ -16,7 +16,7 @@
 					<tr>
 						<td>{row.agent}</td>
 						<td class="tabular-nums">{row.session_count}</td>
-						<td class="tabular-nums">{(row.completed_rate * 100).toFixed(1)}%</td>
+						<td class="tabular-nums">{row.completed_rate.toFixed(1)}%</td>
 						<td class="tabular-nums">{row.avg_failure_signals.toFixed(2)}</td>
 						<td class="tabular-nums">{row.avg_health_score === null ? 'Unscored' : row.avg_health_score.toFixed(2)}</td>
 					</tr>

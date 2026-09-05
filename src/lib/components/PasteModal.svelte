@@ -3,7 +3,6 @@
   import { isUrl, toRawUrl, urlToFileName } from "$lib/utils/url";
   import { renderFull } from "$lib/renderer/pipeline";
   import { tabStore } from "$lib/stores/tabs";
-  import { document as docStore } from "$lib/stores/document";
 
   let { visible = $bindable(false), defaultMode = "paste" }: { visible: boolean; defaultMode?: "paste" | "url" } = $props();
 
@@ -30,17 +29,6 @@
 
     const pastePath = `paste://${Date.now()}`;
     tabStore.addTab(pastePath, fileName, markdown, result.html, result.frontmatter, result.wordCount);
-
-    docStore.set({
-      filePath: pastePath,
-      fileName,
-      content: markdown,
-      renderedHtml: result.html,
-      frontmatter: result.frontmatter,
-      wordCount: result.wordCount,
-      loading: false,
-      error: null,
-    });
 
     text = "";
     visible = false;
@@ -86,17 +74,6 @@
       const urlPath = `url://${trimmed}`;
 
       tabStore.addTab(urlPath, fileName, markdown, result.html, result.frontmatter, result.wordCount);
-
-      docStore.set({
-        filePath: urlPath,
-        fileName,
-        content: markdown,
-        renderedHtml: result.html,
-        frontmatter: result.frontmatter,
-        wordCount: result.wordCount,
-        loading: false,
-        error: null,
-      });
 
       urlInput = "";
       visible = false;
@@ -145,17 +122,38 @@
       mode = defaultMode;
     }
   });
-</script>
-{#if visible}
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="dialog-backdrop fixed inset-0 box ycenter xcenter pad-y-md" onkeydown={handleKeydown} onclick={handleBackdropClick}>
-    <div class="dialog-card card bg-dialog border box dialog-h-screen dialog-xl">
+  /**
+   * A native <dialog>, opened with showModal(). The browser owns the top layer,
+   * the focus trap, the inert background and Escape — all of which were either
+   * hand-rolled per dialog or simply missing. ::backdrop replaces the scrim.
+   */
+  let el = $state<HTMLDialogElement | null>(null);
 
-      <header class="dialog-header row ycenter xbetween pad-x-sm pad-y-xs border-bottom">
+  $effect(() => {
+    if (!el) return;
+    if (visible && !el.open) el.showModal();
+    else if (!visible && el.open) el.close();
+  });
+
+  // A backdrop click lands on the dialog element itself; content is in a child.
+  function onBackdropClick(e: MouseEvent) {
+    if (e.target === el) visible = false;
+  }
+
+</script>
+<dialog
+  bind:this={el}
+  class="dialog dialog-h-screen dialog-xl"
+  onclose={() => (visible = false)}
+  onclick={onBackdropClick}
+>
+  <div class="box hfull min0">
+
+      <header class="row ycenter xbetween pad-x-sm pad-y-xs border-bottom">
         <div class="row ycenter gap-2xs">
-          <div class="mode-tabs row gap-3xs surface pad-3xs">
-            <button class="mode-tab" class:mode-tab-active={mode === "paste"} onclick={() => (mode = "paste")}>Paste</button>
-            <button class="mode-tab" class:mode-tab-active={mode === "url"} onclick={() => (mode = "url")}>Open URL</button>
+          <div class="segmented row gap-3xs surface pad-3xs">
+            <button class="segmented-item" class:active={mode === "paste"} onclick={() => (mode = "paste")}>Paste</button>
+            <button class="segmented-item" class:active={mode === "url"} onclick={() => (mode = "url")}>Open URL</button>
           </div>
           {#if mode === "paste" && autoDetected}
             <span class="badge text-xs">LLM detected</span>
@@ -175,13 +173,13 @@
       </header>
 
       {#if mode === "paste"}
-        <div class="dialog-body pad-x-sm pad-y-sm box grow min0">
+        <div class="pad-sm scroll-y pad-x-sm pad-y-sm box grow min0">
           <textarea bind:value={text} oninput={handleInput}
             placeholder="Paste markdown here...&#10;&#10;Supports raw markdown and LLM API responses with escaped \n characters."
-            class="modal-textarea input text-sm mono wfull modal-textarea-h"></textarea>
+            class="modal-textarea input text-sm mono wfull h-192"></textarea>
         </div>
 
-        <footer class="dialog-footer row ycenter xbetween pad-x-sm pad-y-xs border-top">
+        <footer class="row ycenter xbetween pad-x-sm pad-y-xs border-top">
           <span class="text-xs text-muted">Cmd+Enter to render</span>
           <div class="row gap-2xs">
             <button onclick={() => (visible = false)} class="button ghost text-sm">Cancel</button>
@@ -190,7 +188,7 @@
         </footer>
 
       {:else}
-        <div class="dialog-body box gap-sm pad-x-sm pad-y-sm grow min0">
+        <div class="pad-sm scroll-y box gap-sm pad-x-sm pad-y-sm grow min0">
           <div class="row gap-2xs">
             <input type="text" bind:value={urlInput}
               placeholder="https://github.com/user/repo/blob/main/README.md"
@@ -202,25 +200,24 @@
           {#if urlError}
             <div class="text-xs text-danger pad-x-xs pad-y-2xs bg-danger-soft">{urlError}</div>
           {/if}
-          <div class="url-hints surface pad-xs box gap-3xs text-xs text-secondary">
-            <p class="text-xs weight-600 tt-u text-muted m-0 pad-bottom-3xs">Supported URLs</p>
-            <ul class="box gap-3xs reset-list-pad-md list-disc">
-              <li>GitHub — <code class="kbd text-3xs">github.com/user/repo/blob/main/file.md</code></li>
-              <li>Gist — <code class="kbd text-3xs">gist.github.com/user/id</code></li>
-              <li>GitLab — <code class="kbd text-3xs">gitlab.com/user/repo/-/blob/main/file.md</code></li>
-              <li>Bitbucket — <code class="kbd text-3xs">bitbucket.org/user/repo/src/main/file.md</code></li>
-              <li>Any raw URL — <code class="kbd text-3xs">https://example.com/doc.md</code></li>
+          <div class="text-muted surface pad-xs box gap-3xs text-xs text-secondary">
+            <p class="text-xs weight-600 tt-u text-muted pad-bottom-3xs">Supported URLs</p>
+            <ul class="box gap-3xs unstyled pad-md">
+              <li>GitHub — <code class="kbd text-2xs">github.com/user/repo/blob/main/file.md</code></li>
+              <li>Gist — <code class="kbd text-2xs">gist.github.com/user/id</code></li>
+              <li>GitLab — <code class="kbd text-2xs">gitlab.com/user/repo/-/blob/main/file.md</code></li>
+              <li>Bitbucket — <code class="kbd text-2xs">bitbucket.org/user/repo/src/main/file.md</code></li>
+              <li>Any raw URL — <code class="kbd text-2xs">https://example.com/doc.md</code></li>
             </ul>
           </div>
         </div>
 
-        <footer class="dialog-footer row ycenter xbetween pad-x-sm pad-y-xs border-top">
+        <footer class="row ycenter xbetween pad-x-sm pad-y-xs border-top">
           <span class="text-xs text-muted">Cmd+Enter to fetch</span>
           <div class="row gap-2xs">
             <button onclick={() => (visible = false)} class="button ghost text-sm">Cancel</button>
           </div>
         </footer>
       {/if}
-    </div>
   </div>
-{/if}
+</dialog>

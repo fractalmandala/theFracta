@@ -56,36 +56,36 @@
 	function nextMonth() { if (currentMonthIndex < months.length - 1) currentMonthIndex++; }
 </script>
 
-<section class="cal-card card border pad-2xs box gap-3xs">
+<section class="radius-4 raised pad-xs card border pad-2xs box gap-3xs">
 	<header class="row ycenter xbetween gap-2xs">
 		<button class="button is-icon text-muted" onclick={prevMonth} disabled={currentMonthIndex <= 0} aria-label="Previous month">◀</button>
 		<strong class="text-sm weight-600">{activeMonth}</strong>
 		<button class="button is-icon text-muted" onclick={nextMonth} disabled={currentMonthIndex >= months.length - 1} aria-label="Next month">▶</button>
 	</header>
 
-	<div class="cal-weekdays row text-3xs text-muted">
+	<div class="grid-7 mono ta-c row text-2xs text-muted">
 		{#each ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as w}
-			<span class="grow min0 tt-c">{w}</span>
+			<span class="grow min0 ta-c">{w}</span>
 		{/each}
 	</div>
 
-	<div class="cal-grid grid-7">
+	<div class="grid-7">
 		{#each calendarDays as cell}
 			{#if cell.empty}
 				<span class="cal-cell-empty"></span>
 			{:else}
 				<button
 					class="cal-cell box ycenter xcenter gap-3xs pad-3xs text-xs"
-					class:cal-cell-active={cell.isActive}
-					class:cal-cell-activity={cell.hasActivity}
+					class:border-theme={cell.isActive}
+					class:bg-state-hover={cell.hasActivity}
 					onclick={() => logsState.loadDate(cell.date)}
 				>
 					<span class="text-sm">{cell.dayNum}</span>
 					{#if cell.summary}
-						<div class="cal-dots row gap-3xs">
-							{#if cell.summary.commits > 0}<span class="cal-dot cal-dot-commit" aria-hidden="true"></span>{/if}
-							{#if cell.summary.agent_sessions > 0}<span class="cal-dot cal-dot-agent" aria-hidden="true"></span>{/if}
-							{#if cell.summary.browsing_entries > 0}<span class="cal-dot cal-dot-browse" aria-hidden="true"></span>{/if}
+						<div class="gap-1 row gap-3xs">
+							{#if cell.summary.commits > 0}<span class="w-4 h-4 radius-32 bg-success" aria-hidden="true"></span>{/if}
+							{#if cell.summary.agent_sessions > 0}<span class="w-4 h-4 radius-32 bg-theme" aria-hidden="true"></span>{/if}
+							{#if cell.summary.browsing_entries > 0}<span class="w-4 h-4 radius-32 bg-info" aria-hidden="true"></span>{/if}
 						</div>
 					{/if}
 				</button>

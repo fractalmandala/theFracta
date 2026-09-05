@@ -30,13 +30,13 @@
 
 <div
 	class="boxnode {kindClass}"
-	class:boxnode-collapsed={data.collapsed}
-	class:boxnode-leaf={!data.hasChildren}
-	class:boxnode-lane={data.lane}
-	class:boxnode-dim={data.dim}
-	class:boxnode-match={data.match}
-	class:boxnode-step={data.step > 0}
-	class:boxnode-selected={data.selected}
+	class:italic={data.collapsed}
+	class:border-dashed={!data.hasChildren}
+	class:box={data.lane}
+	class:opacity-half={data.dim}
+	class:border-warning={data.match}
+	class:row={data.step > 0}
+	class:border-theme={data.selected}
 	style="--hue: {data.hue ?? 210}"
 	role="button"
 	tabindex="0"
@@ -46,34 +46,34 @@
 	<Handle type="target" position={Position.Left} />
 	<Handle type="source" position={Position.Right} />
 
-	{#if data.step > 0}<span class="boxnode-stepno">{data.step}</span>{/if}
+	{#if data.step > 0}<span class="mono tabular-nums text-muted">{data.step}</span>{/if}
 
-	<header class="boxnode-header row ycenter gap-2xs">
+	<header class="gap-3xs text-xs row ycenter gap-2xs">
 		{#if data.hasChildren}
 			<button
-				class="boxnode-chev"
+				class="w-12 shrink-0 text-muted"
 				aria-label={data.collapsed ? 'Expand' : 'Collapse'}
 				onclick={(e) => {
 					e.stopPropagation();
 					data.onToggle?.(id);
 				}}>{data.collapsed ? '▸' : '▾'}</button>
 		{:else if ICON[data.kind]}
-			<span class="boxnode-ic">{ICON[data.kind]}</span>
+			<span class="w-12 shrink-0 text-muted">{ICON[data.kind]}</span>
 		{:else}
-			<span class="boxnode-dot"></span>
+			<span class="w-6 h-6 radius-32 shrink-0 bg-theme"></span>
 		{/if}
-		<span class="boxnode-label" title={id}>{data.label}</span>
+		<span class="truncate" title={id}>{data.label}</span>
 		{#if data.kind === 'stylesheet'}
-			<span class="boxnode-badge">{data.defines?.classes ?? 0}<span class="boxnode-u">cls</span></span>
+			<span class="mono text-2xs text-muted">{data.defines?.classes ?? 0}<span class="boxnode-u">cls</span></span>
 		{:else if data.files}
-			<span class="boxnode-badge">{data.files}<span class="boxnode-u">f</span></span>
+			<span class="mono text-2xs text-muted">{data.files}<span class="boxnode-u">f</span></span>
 		{/if}
 	</header>
 
 	{#if data.sub && !data.collapsed}
-		<div class="boxnode-rolled">{data.sub}</div>
+		<div class="italic text-muted">{data.sub}</div>
 	{:else if data.collapsed && data.hiddenCount}
-		<div class="boxnode-rolled">
+		<div class="italic text-muted">
 			+{data.hiddenCount} nested{#if data.loc} · {(data.loc / 1000).toFixed(1)}k LOC{/if}
 		</div>
 	{/if}

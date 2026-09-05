@@ -7,6 +7,7 @@
   import { settings } from "../stores/settings";
   import { Icon } from "fractalicons";
   import { luBookOpen } from "fractalicons/lucide";
+	import { cuFile, cuGlobeAlt, cuStorage, cuPin } from 'fractalicons/coreui'
 
   let { onOpenUrl = () => {} }: { onOpenUrl?: () => void } = $props();
 
@@ -106,55 +107,44 @@
   // Scale home screen UI based on font size setting (17px = 1.0)
   let scale = $derived($settings.fontSize / 17);
 </script>
-<div class="empty-root box gap-md pad-md pad-x-lg" style="zoom: var(--zoom, 1);">
-
-	<!-- Hero -->
-	<header class="empty-hero row ycenter gap-xs pad-bottom-2xs">
-		<span class="empty-hero-icon box ycenter xcenter icon-44">
-			<Icon icon={luBookOpen} size={44} title="Fracta Knowledge" />
-		</span>
-		<div class="box gap-3xs">
-			<h1 class="text-lg weight-700 m-0 title-tight">Fracta Knowledge</h1>
-			<p class="text-sm text-muted m-0">A native Markdown reader and editor.</p>
-		</div>
-	</header>
+<div class="ycenter xcenter hfull ta-c grow box" style="zoom: var(--zoom, 1);">
 
 	<!-- Quick actions -->
-	<div class="row wrap gap-2xs">
-		<button class="button primary text-sm row ycenter gap-2xs" onclick={newDocument}>
-			<svg width="14" height="14" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" class="shrink-0"><path d="M3 1.5h6l3 3v9H3V1.5z"/><line x1="7.5" y1="6" x2="7.5" y2="11"/><line x1="5" y1="8.5" x2="10" y2="8.5"/></svg>
+	<div class="row wrap gap-sm">
+		<button class="button is-icon-text" onclick={newDocument}>
+			<Icon icon={cuFile} size={16}/>
 			New Document
 		</button>
-		<button class="button ghost text-sm row ycenter gap-2xs" onclick={openFileDialog}>
-			<svg width="14" height="14" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" class="shrink-0"><path d="M1.5 5l3-2.5h9v10H1.5V5z"/><line x1="1.5" y1="5" x2="4.5" y2="5"/></svg>
+		<button class="button is-icon-text outline" onclick={openFileDialog}>
+						<Icon icon={cuStorage} size={16}/>
 			Browse Files
 		</button>
-		<button class="button ghost text-sm row ycenter gap-2xs" onclick={onOpenUrl}>
-			<svg width="14" height="14" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" class="shrink-0"><circle cx="7.5" cy="7.5" r="5.5"/><ellipse cx="7.5" cy="7.5" rx="2.5" ry="5.5"/><line x1="2" y1="7.5" x2="13" y2="7.5"/></svg>
+		<button class="button is-icon-text outline" onclick={onOpenUrl}>
+						<Icon icon={cuGlobeAlt} size={16}/>
 			Open URL
 		</button>
-		<button class="button ghost text-sm row ycenter gap-2xs" onclick={addPinnedFolder}>
-			<svg width="14" height="14" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" class="shrink-0"><line x1="7.5" y1="3" x2="7.5" y2="12"/><line x1="3" y1="7.5" x2="12" y2="7.5"/></svg>
+		<button class="button is-icon-text outline" onclick={addPinnedFolder}>
+									<Icon icon={cuPin} size={16}/>
 			Pin Folder
 		</button>
 	</div>
 
 	<!-- Recent + Plans + Folders panels -->
 	{#if (plans.length > 0 && !plansHidden) || $pinnedFolders.length > 0 || $recentFiles.length > 0}
-		<div class="panels-grid grid-2 gap-md">
+		<div class="card-grid gap-sm grid-2 gap-md">
 
 			{#if $recentFiles.length > 0}
 				<section class="box gap-2xs">
 					<header class="row ycenter xbetween pad-x-3xs">
-						<h2 class="text-xs weight-600 tt-u text-muted m-0">Recent Files</h2>
-						<button class="text-xs text-muted cursor-pointer bg-transparent border-0" onclick={() => { clearRecentFiles(); }}>Clear</button>
+						<h2 class="text-xs weight-600 tt-u text-muted">Recent Files</h2>
+						<button class="text-xs text-muted cursor-pointer blank" onclick={() => { clearRecentFiles(); }}>Clear</button>
 					</header>
 					<div class="card border">
-						<div class="empty-card-scroll box">
+						<div class="scroll-y min0 box">
 							{#each $recentFiles as file (file.path)}
-								<button class="empty-item row ycenter gap-xs wfull pad-x-xs pad-y-2xs text-left border-bottom cursor-pointer"
+								<button class="gap-3xs text-sm text-secondary row ycenter gap-xs wfull pad-x-xs pad-y-2xs ta-l border-bottom cursor-pointer"
 									onclick={() => openFile(file.path)}>
-									<span class="empty-item-icon shrink-0" aria-hidden="true">
+									<span class="text-muted shrink-0" aria-hidden="true">
 										<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><rect x="2" y="1" width="10" height="12" rx="1.5"/><line x1="4.5" y1="4" x2="9.5" y2="4"/><line x1="4.5" y1="6.5" x2="8" y2="6.5"/><line x1="4.5" y1="9" x2="9.5" y2="9"/></svg>
 									</span>
 									<span class="box gap-3xs grow min0">
@@ -172,7 +162,7 @@
 			{#if plans.length > 0 && !plansHidden}
 				<section class="box gap-2xs">
 					<header class="row ycenter gap-2xs pad-x-3xs">
-						<h2 class="text-xs weight-600 tt-u text-muted m-0 row ycenter gap-3xs grow">
+						<h2 class="text-xs weight-600 tt-u text-muted row ycenter gap-3xs grow">
 							<svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><rect x="2" y="1" width="10" height="12" rx="1.5"/><polyline points="5,5 6.5,6.5 9,4"/><line x1="4.5" y1="8.5" x2="9.5" y2="8.5"/><line x1="4.5" y1="10.5" x2="8" y2="10.5"/></svg>
 							Claude Plans
 						</h2>
@@ -182,10 +172,10 @@
 						</button>
 					</header>
 					<div class="card border">
-						<div class="empty-card-scroll box">
+						<div class="scroll-y min0 box">
 							{#each plans as plan (plan.path)}
-								<button class="empty-item row ycenter gap-xs wfull pad-x-xs pad-y-2xs text-left border-bottom cursor-pointer" onclick={() => openFile(plan.path)}>
-									<span class="empty-item-icon shrink-0" aria-hidden="true">
+								<button class="gap-3xs text-sm text-secondary row ycenter gap-xs wfull pad-x-xs pad-y-2xs ta-l border-bottom cursor-pointer" onclick={() => openFile(plan.path)}>
+									<span class="text-muted shrink-0" aria-hidden="true">
 										<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><rect x="2" y="1" width="10" height="12" rx="1.5"/><polyline points="5,5 6.5,6.5 9,4"/><line x1="4.5" y1="8.5" x2="9.5" y2="8.5"/><line x1="4.5" y1="10.5" x2="8" y2="10.5"/></svg>
 									</span>
 									<span class="box gap-3xs grow min0">
@@ -203,7 +193,7 @@
 			{#each $pinnedFolders as folder (folder)}
 				<section class="box gap-2xs">
 					<header class="row ycenter gap-2xs pad-x-3xs">
-						<h2 class="text-xs weight-600 tt-u text-muted m-0 row ycenter gap-3xs grow">
+						<h2 class="text-xs weight-600 tt-u text-muted row ycenter gap-3xs grow">
 							<svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 4.5l3-2.5h8v9H1.5V4.5z"/><line x1="1.5" y1="4.5" x2="4.5" y2="4.5"/></svg>
 							{getFolderName(folder)}
 						</h2>
@@ -213,15 +203,15 @@
 						</button>
 					</header>
 					<div class="card border">
-						<div class="empty-card-scroll box">
+						<div class="scroll-y min0 box">
 							{#if !folderFiles[folder]}
-								<div class="card-empty pad-sm text-xs text-muted tt-c">Loading…</div>
+								<div class="border border-dashed blank pad-sm text-xs text-muted ta-c">Loading…</div>
 							{:else if folderFiles[folder].length === 0}
-								<div class="card-empty pad-sm text-xs text-muted tt-c">No markdown files</div>
+								<div class="border border-dashed blank pad-sm text-xs text-muted ta-c">No markdown files</div>
 							{:else}
 								{#each folderFiles[folder] as file (file.path)}
-									<button class="empty-item row ycenter gap-xs wfull pad-x-xs pad-y-2xs text-left border-bottom cursor-pointer" onclick={() => openFile(file.path)}>
-										<span class="empty-item-icon shrink-0" aria-hidden="true">
+									<button class="gap-3xs text-sm text-secondary row ycenter gap-xs wfull pad-x-xs pad-y-2xs ta-l border-bottom cursor-pointer" onclick={() => openFile(file.path)}>
+										<span class="text-muted shrink-0" aria-hidden="true">
 											<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><rect x="2" y="1" width="10" height="12" rx="1.5"/><line x1="4.5" y1="4" x2="9.5" y2="4"/><line x1="4.5" y1="6.5" x2="8" y2="6.5"/><line x1="4.5" y1="9" x2="9.5" y2="9"/></svg>
 										</span>
 										<span class="box gap-3xs grow min0">
@@ -239,25 +229,4 @@
 
 		</div>
 	{/if}
-
-	<!-- Footer hints -->
-	<footer class="empty-footer row ycenter xbetween pad-top-xs mta">
-		<div class="row wrap gap-2xs text-xs text-muted">
-			<span><kbd class="kbd text-3xs">⌘O</kbd> browse</span>
-			<span><kbd class="kbd text-3xs">⌘⇧V</kbd> paste</span>
-			<span><kbd class="kbd text-3xs">⌘T</kbd> new tab</span>
-			{#if plansHidden && plans.length > 0}
-				<button class="empty-footer-link text-xs text-theme bg-transparent border-0 cursor-pointer" onclick={showPlans}>Show Claude Plans</button>
-			{/if}
-		</div>
-		<div class="row ycenter gap-3xs">
-			<button class="button is-icon text-muted" onclick={() => settings.update((s) => ({ ...s, fontSize: Math.max(s.fontSize - 1, 10) }))} title="Zoom out" aria-label="Zoom out">
-				<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="6" x2="10" y2="6"/></svg>
-			</button>
-			<span class="empty-zoom-label text-xs text-muted tabular-nums">{$settings.fontSize}px</span>
-			<button class="button is-icon text-muted" onclick={() => settings.update((s) => ({ ...s, fontSize: Math.min(s.fontSize + 1, 32) }))} title="Zoom in" aria-label="Zoom in">
-				<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="6" y1="2" x2="6" y2="10"/><line x1="2" y1="6" x2="10" y2="6"/></svg>
-			</button>
-		</div>
-	</footer>
 </div>

@@ -1,0 +1,4 @@
+{"type":"user","id":"m1","timestamp":"2026-06-11T18:52:03.001Z","content":"first prompt"}
+{"$set":{"lastUpdated":"2026-06-11T18:52:09.500Z"}}
+{"type":"gemini","id":"m2","timestamp":"2026-06-11T18:52:09.400Z","model":"gemini-3.0","tokens":{"input":12,"output":34},"thoughts":"","content":"a reply"}
+{"$set":{"lastUpdated":"2026-06-11T18:52:09.900Z"}}

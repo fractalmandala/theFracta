@@ -18,10 +18,10 @@
 {#if $docStore.frontmatter}
   {@const entries = getDisplayEntries($docStore.frontmatter)}
   {#if entries.length > 0}
-    <div class="fm-bar row wrap gap-2xs gap-x-md max-w-measure mx-auto pad-x-md pad-y-2xs border-bottom">
+    <div class="text-xs row wrap gap-2xs gap-md pad-x-md pad-y-2xs border-bottom content-shell">
       {#each entries as [key, value]}
         <div class="row ycenter gap-3xs">
-          <span class="fm-key text-xs weight-600 tt-u text-muted">{key}</span>
+          <span class="mono text-xs weight-600 tt-u text-muted">{key}</span>
           <span class="text-sm text-secondary">{value}</span>
         </div>
       {/each}

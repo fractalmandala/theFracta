@@ -1,8 +1,11 @@
 mod commands;
+mod fonts;
 pub mod menu;
 mod observatory_commands;
 mod sidecar;
+mod vault;
 mod watcher;
+mod wiki_commands;
 
 use std::sync::Mutex;
 use tauri::Manager;
@@ -84,6 +87,7 @@ pub fn run() {
         .manage(watcher::WatcherState::default())
         .manage(OpenedFiles::default())
         .manage(sidecar::SidecarState::default())
+        .manage(vault::VaultState::default())
         .invoke_handler(tauri::generate_handler![
             commands::read_markdown_file,
             commands::write_markdown_file,
@@ -103,6 +107,17 @@ pub fn run() {
             observatory_commands::get_daily_log,
             observatory_commands::open_in_editor,
             sidecar::fractorches_base_url,
+            wiki_commands::wiki_data_dir,
+            wiki_commands::list_wiki_entries,
+            vault::commands::vault_available,
+            vault::commands::vault_list,
+            vault::commands::vault_list_children,
+            vault::commands::vault_add,
+            vault::commands::vault_remove,
+            vault::commands::vault_scan,
+            vault::commands::vault_cancel_scan,
+            vault::commands::vault_index_path,
+            fonts::list_system_fonts,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -110,6 +125,39 @@ pub fn run() {
             app.set_menu(menu)?;
 
             app.state::<sidecar::SidecarState>().resolve();
+
+            // The notes index. A failure to open is recorded rather than
+            // raised: Notes still works without it, on the folder-listing path.
+            if let Ok(dir) = app.path().app_data_dir() {
+                app.state::<vault::VaultState>().open(&dir);
+            }
+
+            // Pick up on disk changes made while the app was closed, so a vault
+            // is never quietly out of date on the first screen.
+            {
+                let handle = app.handle().clone();
+                std::thread::spawn(move || {
+                    let ids: Vec<i64> = {
+                        let state = handle.state::<vault::VaultState>();
+                        let guard = state.conn.lock().unwrap();
+                        guard
+                            .as_ref()
+                            .and_then(|conn| {
+                                conn.prepare("SELECT id FROM vault")
+                                    .ok()
+                                    .and_then(|mut stmt| {
+                                        stmt.query_map([], |r| r.get::<_, i64>(0))
+                                            .ok()
+                                            .map(|rows| rows.flatten().collect())
+                                    })
+                            })
+                            .unwrap_or_default()
+                    };
+                    for id in ids {
+                        let _ = vault::commands::vault_scan(handle.clone(), id);
+                    }
+                });
+            }
 
             // Red-button (window) close routes through the frontend quit guard
             // instead of closing, so unsaved changes get a confirm dialog (#54).

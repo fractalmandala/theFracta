@@ -84,12 +84,12 @@
 	});
 </script>
 
-<div class="timeline-shell box gap-md pad-md grow min0 scroll-y">
+<div class="row box gap-md pad-md grow min0 scroll-y">
 	{#if log}
 		<!-- Hero -->
 		<header class="box gap-3xs border-bottom pad-bottom-3xs">
 			<div class="row ycenter xbetween gap-2xs">
-				<h2 class="text-lg weight-600 m-0">Daily Activity — {log.date}</h2>
+				<h2 class="text-lg weight-600">Daily Activity — {log.date}</h2>
 				<span class="text-sm text-muted">{log.day_of_week} · {timelineItems.length} entries</span>
 			</div>
 
@@ -125,20 +125,20 @@
 		<!-- Filter bar -->
 		<div class="row ycenter xbetween gap-2xs pad-y-2xs">
 			<div class="row gap-3xs">
-				<button class="button small ghost text-xs" class:button-primary={logsState.filterType === 'all'} onclick={() => logsState.setFilter('all')}>
+				<button class="button small ghost text-xs" class:primary={logsState.filterType === 'all'} onclick={() => logsState.setFilter('all')}>
 					All ({commits.length + browsing.length + agentSessions.length})
 				</button>
-				<button class="button small ghost text-xs" class:button-primary={logsState.filterType === 'commits'} onclick={() => logsState.setFilter('commits')}>
+				<button class="button small ghost text-xs" class:primary={logsState.filterType === 'commits'} onclick={() => logsState.setFilter('commits')}>
 					Commits ({commits.length})
 				</button>
-				<button class="button small ghost text-xs" class:button-primary={logsState.filterType === 'sessions'} onclick={() => logsState.setFilter('sessions')}>
+				<button class="button small ghost text-xs" class:primary={logsState.filterType === 'sessions'} onclick={() => logsState.setFilter('sessions')}>
 					Sessions ({agentSessions.length})
 				</button>
-				<button class="button small ghost text-xs" class:button-primary={logsState.filterType === 'browsing'} onclick={() => logsState.setFilter('browsing')}>
+				<button class="button small ghost text-xs" class:primary={logsState.filterType === 'browsing'} onclick={() => logsState.setFilter('browsing')}>
 					Browsing ({browsing.length})
 				</button>
 				{#if handoffs.length > 0}
-					<button class="button small ghost text-xs" class:button-primary={logsState.filterType === 'handoffs'} onclick={() => logsState.setFilter('handoffs')}>
+					<button class="button small ghost text-xs" class:primary={logsState.filterType === 'handoffs'} onclick={() => logsState.setFilter('handoffs')}>
 						Handoffs ({handoffs.length})
 					</button>
 				{/if}
@@ -147,24 +147,24 @@
 				type="text"
 				placeholder="Search entries…"
 				bind:value={searchFilter}
-				class="input text-sm shrink-0 recall-search-input"
+				class="input text-sm shrink-0 grow min0"
 			/>
 		</div>
 
 		<!-- Stream -->
 		<div class="box gap-2xs">
 			{#if timelineItems.length === 0}
-				<p class="text-sm text-muted tt-c pad-md">No entries match the selected filter.</p>
+				<p class="text-sm text-muted pad-md ta-c">No entries match the selected filter.</p>
 			{:else}
 				{#each timelineItems as item}
 					<div
-						class="timeline-item row ycenter gap-2xs pad-x-2xs pad-y-3xs border-bottom cursor-pointer"
+						class="gap-xs pad-y-2xs row ycenter gap-2xs pad-x-2xs pad-y-3xs border-bottom cursor-pointer"
 						role="button"
 						tabindex="0"
 						onclick={() => logsState.selectEntry(item)}
 						onkeydown={(e) => e.key === 'Enter' && logsState.selectEntry(item)}
 					>
-						<span class="timeline-icon text-muted shrink-0">
+						<span class="w-24 text-muted shrink-0">
 							{#if item.type === 'commit'}⌥
 							{:else if item.type === 'session'}◉
 							{:else if item.type === 'handoff'}📝
@@ -184,7 +184,7 @@
 							<div class="row ycenter gap-2xs text-xs text-muted">
 								<span class="grow min0 truncate">{item.sub}</span>
 								{#if item.badge}
-									<span class="badge text-3xs" class:badge-success={item.type === 'commit'} class:badge-accent={item.type === 'session'}>
+									<span class="badge text-2xs" class:border-success={item.type === 'commit'} class:border-theme={item.type === 'session'}>
 										{item.badge}
 									</span>
 								{/if}

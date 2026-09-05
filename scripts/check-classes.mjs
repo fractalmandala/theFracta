@@ -21,6 +21,9 @@ const SRC = join(ROOT, 'src');
 // Classes that exist for JavaScript, not CSS: query hooks, test ids, and
 // classes a third-party library attaches at runtime. Keep this list short and
 // justified — it is the only legitimate way past the check.
+// _09_canonical_candidates.sass stages changes headed into fractalstyler2, so a
+// class there is a proposal, not app CSS. It is compiled into `defined` like any
+// other layer, but must never be pruned for being unreferenced by this app.
 const ALLOW = new Set([
 	'raw-source', // scroll-sync.ts queries pre.raw-source
 	'md-content', // SearchOverlay queries article.md-content
@@ -94,10 +97,22 @@ function usedClasses(files) {
 			used.get(cls).push(`${rel}:${line}`);
 		};
 		const lineOf = (idx) => text.slice(0, idx).split('\n').length;
-		// Static class="..." only. A class={expr} is dynamic and unverifiable,
-		// so it is skipped rather than guessed at.
+		// Fully static class="..." attributes.
 		for (const m of text.matchAll(/class="([^"{}]*)"/g)) {
 			for (const cls of m[1].split(/\s+/)) {
+				if (/^[A-Za-z][A-Za-z0-9_-]*$/.test(cls)) add(cls, lineOf(m.index));
+			}
+		}
+		// Mixed attributes — class="rail rail-{side}" — still carry static tokens,
+		// and those were invisible here until a cleanup pass deleted .rail as
+		// "unreferenced". Only the interpolated parts are genuinely unverifiable.
+		for (const m of text.matchAll(/class="([^"]*\{[^"]*)"/g)) {
+			// Drop ${...} template-literal interpolations before splitting, or the
+			// JS identifiers inside them read as class names.
+			// Truncate at the first ${ — the capture stops at the next quote, so an
+			// interpolation is usually left unbalanced and its JS would read as
+			// class names. Tokens before it are still real and worth checking.
+			for (const cls of m[1].replace(/\$\{[\s\S]*$/, ' ').split(/\s+/)) {
 				if (/^[A-Za-z][A-Za-z0-9_-]*$/.test(cls)) add(cls, lineOf(m.index));
 			}
 		}
@@ -115,8 +130,11 @@ const used = usedClasses(files);
 
 const dead = [...used.entries()]
 	.filter(([cls]) => !defined.has(cls) && !ALLOW.has(cls))
-	// Svelte's own scoping hashes (s-XXXX / 6-char base36) are not authored classes.
-	.filter(([cls]) => !/^s-[A-Za-z0-9]{6,}$/.test(cls) && !/^[a-z0-9]{6}$/.test(cls))
+	// Svelte's own scoping hashes are not authored classes. They are always
+	// prefixed — `svelte-<hash>` or `s-<hash>`. A bare six-character word is a
+	// real class name, and treating it as a hash silently exempted `.editor`,
+	// which was referenced by the editor textarea and defined nowhere.
+	.filter(([cls]) => !/^(?:s|svelte)-[A-Za-z0-9]{6,}$/.test(cls))
 	.sort((a, b) => b[1].length - a[1].length);
 
 if (json) {

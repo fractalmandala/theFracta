@@ -58,6 +58,30 @@ hljs.registerLanguage("kotlin", kotlin);
 hljs.registerLanguage("ruby", ruby);
 hljs.registerLanguage("php", php);
 hljs.registerLanguage("jsx", javascript);
+
+/**
+ * Highlight a fenced block, but only when its language is stated.
+ *
+ * There used to be an `hljs.highlightAuto` fallback for unlabelled fences. It
+ * runs every one of the 27 registered grammars over the block and scores them,
+ * so a document with many unlabelled fences — logs, plain output, prose in a
+ * code block — paid that cost per block on every render, to guess a language it
+ * frequently got wrong. An unlabelled fence now renders as plain text, which is
+ * what it claims to be.
+ *
+ * Returning an empty string tells markdown-it to escape the source itself.
+ */
+function highlightFence(str: string, lang: string): string {
+	if (lang && lang !== "mermaid" && hljs.getLanguage(lang)) {
+		try {
+			return hljs.highlight(str, { language: lang }).value;
+		} catch {
+			// A grammar that throws on this input is not worth failing a render
+			// over; fall through to plain text.
+		}
+	}
+	return "";
+}
 hljs.registerLanguage("tsx", typescript);
 
 export interface RenderResult {
@@ -151,17 +175,7 @@ export async function initRenderer(): Promise<void> {
     html: false,
     linkify: true,
     typographer: true,
-    highlight: (str, lang) => {
-      if (lang && lang !== "mermaid" && hljs.getLanguage(lang)) {
-        try {
-          return hljs.highlight(str, { language: lang }).value;
-        } catch {}
-      }
-      try {
-        return hljs.highlightAuto(str).value;
-      } catch {}
-      return "";
-    },
+    highlight: highlightFence,
   });
 
   md.use(texmath, {
@@ -196,17 +210,7 @@ export function renderFull(markdown: string, baseDir?: string): RenderResult {
     html: false,
     linkify: true,
     typographer: true,
-    highlight: (str, lang) => {
-      if (lang && lang !== "mermaid" && hljs.getLanguage(lang)) {
-        try {
-          return hljs.highlight(str, { language: lang }).value;
-        } catch {}
-      }
-      try {
-        return hljs.highlightAuto(str).value;
-      } catch {}
-      return "";
-    },
+    highlight: highlightFence,
   });
     md.use(texmath, { engine: katex, delimiters: "dollars" });
     md.use(taskLists, { enabled: false, label: true });

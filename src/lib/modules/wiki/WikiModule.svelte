@@ -1,12 +1,20 @@
 <script lang="ts">
-	import { wikiState } from '$lib/wiki/state';
+	import { onMount } from 'svelte';
+	import { wikiState } from '$lib/wiki/state.svelte';
+	import { wikiStore } from '$lib/wiki/store.svelte';
+	import { wikiCorpus } from '$lib/wiki/corpus.svelte';
 	import Rail from '$lib/components/Rail.svelte';
 	import WikiSidebar from './WikiSidebar.svelte';
 	import WikiArticle from './WikiArticle.svelte';
+	import WikiCorpusEntry from './WikiCorpusEntry.svelte';
+	import WikiCompilePanel from './WikiCompilePanel.svelte';
 	import WikiInspector from './WikiInspector.svelte';
 	import WikiTelemetryView from './WikiTelemetryView.svelte';
 
-	const viewMode = wikiState.viewMode;
+	onMount(() => {
+		void wikiStore.load();
+		void wikiCorpus.load();
+	});
 </script>
 
 <!--
@@ -20,9 +28,13 @@
 	</Rail>
 
 	<section class="main-section">
-		{#if $viewMode === 'entry'}
+		{#if wikiState.viewMode === 'entry'}
 			<WikiArticle />
-		{:else if $viewMode === 'telemetry'}
+		{:else if wikiState.viewMode === 'corpus'}
+			<WikiCorpusEntry />
+		{:else if wikiState.viewMode === 'compile'}
+			<WikiCompilePanel />
+		{:else if wikiState.viewMode === 'telemetry'}
 			<WikiTelemetryView />
 		{/if}
 	</section>

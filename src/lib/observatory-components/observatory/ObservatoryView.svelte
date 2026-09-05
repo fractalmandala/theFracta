@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { observatory } from '$lib/observatory-state/observatory.svelte';
+	import { tabStore, HOME_TAB_ID, type Tab } from "$lib/stores/tabs";
 	import Rail from '$lib/components/Rail.svelte';
 	import ObservatoryHeader from './ObservatoryHeader.svelte';
 	import SessionSidebar from './SessionSidebar.svelte';
@@ -8,7 +9,7 @@
 	import TranscriptViewer from './TranscriptViewer.svelte';
 	import ActivityHeatmap from './ActivityHeatmap.svelte';
 	import ActivityView from './ActivityView.svelte';
-	import CostTreemap from './CostTreemap.svelte';
+	import UsageView from './UsageView.svelte';
 	import TopSkillsCard from './TopSkillsCard.svelte';
 	import QualityDashboard from './QualityDashboard.svelte';
 	import RecentEditsFeed from './RecentEditsFeed.svelte';
@@ -17,7 +18,6 @@
 	import PinnedView from './PinnedView.svelte';
 	import StatusFooter from './StatusFooter.svelte';
 	import AgentComparisonCard from './AgentComparisonCard.svelte';
-	import ModelBreakdownTable from './ModelBreakdownTable.svelte';
 
 	onMount(() => observatory.load());
 
@@ -36,11 +36,15 @@
 -->
 <div class="box grow min0 hfull">
 	<ObservatoryHeader />
-
 	{#if observatory.loading}
+		<!--
+		  Only a cold read blanks the canvas. A reconcile keeps the dashboard up
+		  and reports itself in the status footer instead. The old copy said
+		  "Ingesting" — Fractorches does the ingesting; this is a read.
+		-->
 		<div class="box grow ycenter xcenter gap-sm pad-2xl">
 			<div class="spinner" aria-hidden="true"></div>
-			<span class="text-muted">Ingesting agent sessions…</span>
+			<span class="text-muted">Reading agent sessions…</span>
 		</div>
 	{:else}
 		<div class="row grow min0">
@@ -50,7 +54,7 @@
 				</Rail>
 			{/if}
 
-			<main class="observatory-canvas">
+			<main class="grow min0 box gap-sm pad-sm scroll-y">
 				{#if observatory.error}
 					<!--
 					  A failing endpoint is a notice inside the canvas, not a
@@ -71,8 +75,7 @@
 				{:else if observatory.activeTab === 'sessions'}
 					<ActivityHeatmap />
 				{:else if observatory.activeTab === 'usage'}
-					<CostTreemap />
-					<ModelBreakdownTable />
+					<UsageView />
 				{:else if observatory.activeTab === 'activity'}
 					<ActivityView />
 				{:else if observatory.activeTab === 'trends'}
@@ -91,11 +94,17 @@
 				{/if}
 			</main>
 
-			{#if observatory.filterPanelOpen}
-				<Rail id="obs-filters" side="right" label="Filters" initial={260} min={200} max={420}>
-					<SessionFilterPanel />
-				</Rail>
-			{/if}
+			<Rail
+				id="obs-filters"
+				side="right"
+				label="Filters"
+				initial={260}
+				min={200}
+				max={420}
+				defaultCollapsed
+			>
+				<SessionFilterPanel />
+			</Rail>
 		</div>
 		<StatusFooter />
 	{/if}

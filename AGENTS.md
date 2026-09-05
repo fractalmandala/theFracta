@@ -46,14 +46,10 @@
 - New or changed authored styles use indented `.sass` only: tabs for nesting,
   no braces, no semicolons, no `.css`, no `.scss`, no inline `style` attributes,
   and no component `<style>` blocks.
-- New styling must follow Fractalstyler2's current semantic token and fractal
+- Styling must follow Fractalstyler2's current semantic token and fractal
   composition contract. Do not introduce foreign custom properties or
   hardcoded visual values where a contract token exists.
-- A retained theme control must use Fractalthemer integrated with
-  Fractalstyler2's complete token contract. Otherwise omit theme controls.
 - New icon needs use Fractalicons. Do not add another icon package.
-- Existing upstream styling may remain during the compatibility phase. A file
-  touched for new styling must migrate the touched rules to the contract above.
 
 ## Data Integrity
 

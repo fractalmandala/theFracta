@@ -15,5 +15,5 @@
 </script>
 
 {#if $docStore.renderedHtml}
-  <div class="progress-bar relative" style="--progress: {progress}%"></div>
+  <div class="h-2 bg-theme relative" style="--progress: {progress}%"></div>
 {/if}

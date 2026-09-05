@@ -201,29 +201,29 @@
     faviconErrored = new Set(faviconErrored);
   }
 </script>
-<div class="ail-root box gap-3xs">
+<div class="gap-sm box gap-3xs">
   {#each $aiLookup.providers as p (p.id)}
     {@const expanded = isExpanded(p)}
     {@const isEditingProvider = editingProviderId === p.id}
-    <div class="provider border" class:opacity-half={!expanded}>
+    <div class="row ycenter gap-2xs min0 border" class:opacity-half={!expanded}>
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div class="provider-row row ycenter gap-xs pad-x-xs pad-y-2xs cursor-pointer" onclick={() => toggleProvider(p)}>
-        <span class="text-muted shrink-0 icon-chevron-slot" aria-hidden="true">
+      <div class="gap-2xs pad-y-3xs border-bottom row ycenter gap-xs pad-x-xs pad-y-2xs cursor-pointer" onclick={() => toggleProvider(p)}>
+        <span class="text-muted shrink-0 w-16 row xcenter" aria-hidden="true">
           {#if expanded}<Icon icon={luChevronDown} size={12} decorative />{:else}<Icon icon={luChevronRight} size={12} decorative />{/if}
         </span>
-        <span class="provider-favicon overflow-hidden">
+        <span class="w-16 h-16 shrink-0 radius-2 overflow-hidden">
           {#if faviconErrored.has(p.id) || !faviconUrl(p)}
             <span class="text-xs weight-600 text-secondary">{p.name.charAt(0).toUpperCase()}</span>
           {:else}
-            <img class="provider-favicon-img" src={faviconUrl(p)} alt="" onerror={() => onFaviconError(p.id)} />
+            <img class="w-16 h-16 shrink-0 radius-2" src={faviconUrl(p)} alt="" onerror={() => onFaviconError(p.id)} />
           {/if}
         </span>
         <span class="text-sm weight-500 grow min0 truncate">{p.name}</span>
         {#if p.prompts.length > 0}
           <span class="text-xs text-muted tabular-nums pad-x-2xs pad-y-3xs surface">{p.prompts.length}</span>
         {/if}
-        <div class="provider-actions row gap-3xs shrink-0">
+        <div class="mta row gap-3xs shrink-0">
           <button class="button is-icon text-muted" title="Edit provider" aria-label="Edit provider" onclick={(e) => { e.stopPropagation(); startEditProvider(p); }}>
             <Icon icon={luPencil} size={14} decorative />
           </button>
@@ -235,7 +235,7 @@
 
       {#if expanded}
         {#if isEditingProvider}
-          <div class="edit-form box gap-2xs pad-xs surface border-top">
+          <div class="gap-xs box gap-2xs pad-xs surface border-top">
             <input class="input text-xs wfull" bind:value={pName} placeholder="Provider name" />
             <input class="input text-xs mono wfull" bind:value={pUrl} placeholder="https://example.com/?q={prompt}" />
             {#if pError}<div class="text-xs text-danger">{pError}</div>{/if}
@@ -247,11 +247,11 @@
           </div>
         {/if}
 
-        <div class="prompts box gap-3xs pad-x-sm pad-bottom-xs pad-left-lg">
+        <div class="box gap-3xs pad-x-sm pad-bottom-xs pad-left-lg">
           {#each p.prompts as pr (pr.id)}
             {@const isEditingThisPrompt = editingPromptKey === `${p.id}:${pr.id}`}
             {#if isEditingThisPrompt}
-              <div class="edit-form box gap-2xs pad-xs surface border-top border m-y-3xs">
+              <div class="gap-xs box gap-2xs pad-xs surface border-top border m-y-3xs">
                 <input class="input text-xs wfull" bind:value={prName} placeholder="Prompt name" />
                 <textarea class="input text-xs mono wfull" bind:value={prTemplate} rows="2" placeholder={'Template — use {selection} where the text goes'}></textarea>
                 {#if prError}<div class="text-xs text-danger">{prError}</div>{/if}
@@ -262,9 +262,9 @@
                 </div>
               </div>
             {:else}
-              <div class="prompt-row row ycenter gap-2xs pad-x-2xs pad-y-3xs" title={pr.template}>
+              <div class="border-bottom row ycenter gap-2xs pad-x-2xs pad-y-3xs" title={pr.template}>
                 <span class="text-xs grow min0 truncate">{pr.name}</span>
-                <div class="prompt-actions row gap-3xs shrink-0">
+                <div class="mta row gap-3xs shrink-0">
                   <button class="button is-icon text-muted" title="Edit prompt" aria-label="Edit prompt" onclick={() => startEditPrompt(p.id, pr)}>
                     <Icon icon={luPencil} size={13} decorative />
                   </button>
@@ -277,7 +277,7 @@
           {/each}
 
           {#if addingPromptFor === p.id}
-            <div class="edit-form box gap-2xs pad-xs surface border">
+            <div class="gap-xs box gap-2xs pad-xs surface border">
               <input class="input text-xs wfull" bind:value={prName} placeholder="Prompt name" />
               <textarea class="input text-xs mono wfull" bind:value={prTemplate} rows="2" placeholder={'Template — use {selection} where the text goes'}></textarea>
               {#if prError}<div class="text-xs text-danger">{prError}</div>{/if}
@@ -288,7 +288,7 @@
               </div>
             </div>
           {:else}
-            <button class="button ghost dashed-action text-xs text-muted align-self-start m-top-3xs" onclick={() => startAddPrompt(p.id)}>+ Add prompt</button>
+            <button class="button ghost border border-dashed radius-4 blank text-secondary pad-y-2xs pad-x-sm text-xs text-muted align-self-start m-top-3xs" onclick={() => startAddPrompt(p.id)}>+ Add prompt</button>
           {/if}
         </div>
       {/if}
@@ -296,7 +296,7 @@
   {/each}
 
   {#if addingProviderOpen}
-    <div class="edit-form box gap-2xs pad-xs surface border m-top-2xs">
+    <div class="gap-xs box gap-2xs pad-xs surface border m-top-2xs">
       <input class="input text-xs wfull" bind:value={pName} placeholder="Provider name" />
       <input class="input text-xs mono wfull" bind:value={pUrl} placeholder="https://example.com/?q={prompt}" />
       {#if pError}<div class="text-xs text-danger">{pError}</div>{/if}
@@ -307,10 +307,10 @@
       </div>
     </div>
   {:else}
-    <button class="button ghost dashed-action text-xs text-muted wfull m-top-2xs" onclick={startAddProvider}>+ Add provider</button>
+    <button class="button ghost border border-dashed radius-4 blank text-secondary pad-y-2xs pad-x-sm text-xs text-muted wfull m-top-2xs" onclick={startAddProvider}>+ Add provider</button>
   {/if}
 
-  <div class="default-row row ycenter xbetween gap-xs pad-top-xs pad-bottom-3xs border-top m-top-2xs">
+  <div class="gap-2xs pad-y-3xs border-bottom row ycenter xbetween gap-xs pad-top-xs pad-bottom-3xs border-top m-top-2xs">
     <span class="text-xs text-secondary">Default for Custom prompt</span>
     <div class="row ycenter gap-2xs">
       {#if $aiLookup.providers.length > 0}

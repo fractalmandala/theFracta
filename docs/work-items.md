@@ -17,6 +17,9 @@ tags:
 | Observatory UI port and API adapter | Observatory lane | Integrated; gates pass | RepoGraph handoff and service import |
 | Cross-source parity suite | Integrator | In progress | Observatory adapter and session filter parity |
 | Full desktop acceptance (single window) | Integrator and user | In progress | View rebuilds, search fix |
+| Remaining Observatory view rebuilds (transcript, activity, recall, pinned, recent, heatmap) | Observatory lane | In progress | Authored stylesheets present |
+| Search 501 fix (B11) | Observatory lane | In progress | Sidecar search worker |
+| Wiki surface: private article store and recall corpus (Phase 1) | Wiki lane | Implemented; pending user evaluation | Fractorches recall API; parallel styling lane |
+| Wiki surface: draft compilation through the service (Phase 2) | Wiki lane | Implemented; pending user evaluation | Fractorches compile endpoints; a configured generation path (insights endpoint or agent CLI) |
 
 No waiting item is represented by a placeholder in a delivered interface.
-| Remaining Observatory view rebuilds (transcript, activity, recall, pinned, recent, heatmap) | Observatory lane | In progress | Authored stylesheets present | Search 501 fix (B11) | Observatory lane | In progress | Sidecar search worker |

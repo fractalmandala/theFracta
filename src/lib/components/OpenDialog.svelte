@@ -7,7 +7,6 @@
   import { isUrl, toRawUrl, urlToFileName } from "$lib/utils/url";
   import { renderFull } from "$lib/renderer/pipeline";
   import { tabStore } from "$lib/stores/tabs";
-  import { document as docStore } from "$lib/stores/document";
 
   let { visible = $bindable(false) }: { visible: boolean } = $props();
 
@@ -80,7 +79,6 @@
       const fileName = urlToFileName(trimmed);
       const urlPath = `url://${trimmed}`;
       tabStore.addTab(urlPath, fileName, markdown, result.html, result.frontmatter, result.wordCount);
-      docStore.set({ filePath: urlPath, fileName, content: markdown, renderedHtml: result.html, frontmatter: result.frontmatter, wordCount: result.wordCount, loading: false, error: null });
       urlInput = "";
       visible = false;
     } catch (err) {
@@ -190,14 +188,35 @@
       loadFolderFiles();
     }
   });
-</script>
-{#if visible}
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="dialog-backdrop fixed inset-0 box ycenter xcenter pad-y-md" onclick={handleBackdropClick} onkeydown={handleKeydown}>
-    <div class="dialog-card card bg-dialog border box dialog-h-screen dialog-lg">
+  /**
+   * A native <dialog>, opened with showModal(). The browser owns the top layer,
+   * the focus trap, the inert background and Escape — all of which were either
+   * hand-rolled per dialog or simply missing. ::backdrop replaces the scrim.
+   */
+  let el = $state<HTMLDialogElement | null>(null);
 
-      <header class="dialog-header row ycenter xbetween pad-x-sm pad-y-xs border-bottom">
-        <h2 class="text-md weight-600 m-0">Open</h2>
+  $effect(() => {
+    if (!el) return;
+    if (visible && !el.open) el.showModal();
+    else if (!visible && el.open) el.close();
+  });
+
+  // A backdrop click lands on the dialog element itself; content is in a child.
+  function onBackdropClick(e: MouseEvent) {
+    if (e.target === el) visible = false;
+  }
+
+</script>
+<dialog
+  bind:this={el}
+  class="dialog dialog-h-screen dialog-lg"
+  onclose={() => (visible = false)}
+  onclick={onBackdropClick}
+>
+  <div class="box hfull min0">
+
+      <header class="row ycenter xbetween pad-x-sm pad-y-xs border-bottom">
+        <h2 class="text-md weight-600">Open</h2>
         <button onclick={() => (visible = false)} class="button is-icon text-muted" aria-label="Close open dialog">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="3" y1="3" x2="11" y2="11"/><line x1="11" y1="3" x2="3" y2="11"/></svg>
         </button>
@@ -205,7 +224,7 @@
 
       <!-- Quick entry -->
       <div class="box gap-2xs pad-x-sm pad-y-sm border-bottom">
-        <button onclick={handleOpenSystem} class="browse-btn row ycenter gap-2xs wfull surface border pad-x-xs pad-y-2xs text-sm text-primary text-left cursor-pointer">
+        <button onclick={handleOpenSystem} class="is-ghost gap-3xs row ycenter gap-2xs wfull surface border pad-x-xs pad-y-2xs text-sm text-primary ta-l cursor-pointer">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" class="shrink-0">
             <path d="M2 5l4-3h8v11H2V5z"/><line x1="2" y1="5" x2="6" y2="5"/>
           </svg>
@@ -228,27 +247,27 @@
 
       <!-- Tabs -->
       <nav class="row gap-3xs pad-x-sm pad-y-2xs border-bottom" aria-label="Open source">
-        <button class="dialog-tab" class:dialog-tab-active={activeTab === "recent"} onclick={() => (activeTab = "recent")}>
+        <button class="tab-trigger" class:active={activeTab === "recent"} onclick={() => (activeTab = "recent")}>
           Recent {#if $recentFiles.length > 0}<span class="badge text-xs">{$recentFiles.length}</span>{/if}
         </button>
-        <button class="dialog-tab" class:dialog-tab-active={activeTab === "folders"} onclick={() => { activeTab = "folders"; loadFolderFiles(); }}>
+        <button class="tab-trigger" class:active={activeTab === "folders"} onclick={() => { activeTab = "folders"; loadFolderFiles(); }}>
           Folders {#if $pinnedFolders.length > 0}<span class="badge text-xs">{$pinnedFolders.length}</span>{/if}
         </button>
-        <button class="dialog-tab" class:dialog-tab-active={activeTab === "plans"} onclick={() => { activeTab = "plans"; loadPlans(); }}>
+        <button class="tab-trigger" class:active={activeTab === "plans"} onclick={() => { activeTab = "plans"; loadPlans(); }}>
           Plans {#if plans.length > 0}<span class="badge text-xs">{plans.length}</span>{/if}
         </button>
       </nav>
 
       <!-- Content -->
-      <div class="dialog-content box gap-3xs pad-x-xs pad-y-xs grow min0 scroll-y dialog-content-flex">
+      <div class="pad-sm box gap-3xs pad-x-xs pad-y-xs grow min0 scroll-y row">
 
         {#if activeTab === "recent"}
           {#if $recentFiles.length === 0}
-            <div class="empty-list box ycenter xcenter gap-2xs pad-y-xl text-muted text-sm">No recent files</div>
+            <div class="row wrap box ycenter xcenter gap-2xs pad-y-xl text-muted text-sm">No recent files</div>
           {:else}
             {#each $recentFiles as file (file.path)}
-              <button class="file-item row ycenter gap-xs wfull pad-x-sm pad-y-2xs text-left cursor-pointer" onclick={() => handleOpenFile(file.path)}>
-                <span class="file-icon shrink-0 text-muted" aria-hidden="true">
+              <button class="navtree-link gap-2xs row ycenter gap-xs wfull pad-x-sm pad-y-2xs ta-l cursor-pointer" onclick={() => handleOpenFile(file.path)}>
+                <span class="shrink-0 text-muted" aria-hidden="true">
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><rect x="2" y="1" width="10" height="12" rx="1.5"/><line x1="4.5" y1="4" x2="9.5" y2="4"/><line x1="4.5" y1="6.5" x2="8" y2="6.5"/><line x1="4.5" y1="9" x2="9" y2="9"/></svg>
                 </span>
                 <span class="box gap-3xs grow min0">
@@ -262,8 +281,8 @@
 
         {:else if activeTab === "folders"}
           {#if $pinnedFolders.length === 0}
-            <div class="empty-list box ycenter xcenter gap-2xs pad-y-xl">
-              <p class="text-muted text-sm m-0">No pinned folders</p>
+            <div class="row wrap box ycenter xcenter gap-2xs pad-y-xl">
+              <p class="text-muted text-sm">No pinned folders</p>
               <button class="button ghost text-sm" onclick={handleAddFolder}>
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" class="shrink-0"><line x1="7" y1="3" x2="7" y2="11"/><line x1="3" y1="7" x2="11" y2="7"/></svg>
                 Pin a folder
@@ -272,22 +291,22 @@
           {:else}
             {#each $pinnedFolders as folder (folder)}
               <div class="box gap-3xs">
-                <button class="folder-header row ycenter gap-2xs wfull pad-x-sm pad-y-2xs text-sm text-primary text-left cursor-pointer" onclick={() => toggleDialogFolder(folder)}>
+                <button class="gap-3xs blank pad-y-3xs pad-x-2xs text-xs tt-u tracking-wider text-muted row ycenter gap-2xs wfull pad-x-sm pad-y-2xs text-sm text-primary ta-l cursor-pointer" onclick={() => toggleDialogFolder(folder)}>
                   <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" class="folder-chevron shrink-0 text-muted" class:folder-chevron-open={expandedDialogFolders.has(folder)} aria-hidden="true">
                     <path d="M3 1l4 4-4 4"/>
                   </svg>
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true">
                     <path d="M1.5 4.5l3-2.5h8v9H1.5V4.5z"/><line x1="1.5" y1="4.5" x2="4.5" y2="4.5"/>
                   </svg>
-                  <span class="folder-name weight-500">{getFolderName(folder)}</span>
-                  <span class="folder-file-count text-xs text-muted tabular-nums">{folderFiles[folder]?.length ?? '…'}</span>
-                  <span class="folder-path text-xs text-muted truncate grow min0 text-right">{shortenPath(folder)}</span>
+                  <span class="truncate weight-500">{getFolderName(folder)}</span>
+                  <span class="mta mono text-2xs text-xs text-muted tabular-nums">{folderFiles[folder]?.length ?? '…'}</span>
+                  <span class="mono text-2xs text-xs text-muted truncate grow min0 ta-r">{shortenPath(folder)}</span>
                 </button>
                 {#if expandedDialogFolders.has(folder)}
                   {#if folderFiles[folder]}
                     {#each folderFiles[folder] as file (file.path)}
-                      <button class="file-item file-item-nested row ycenter gap-xs wfull pad-x-sm pad-y-2xs text-left cursor-pointer" onclick={() => handleOpenFile(file.path)}>
-                        <span class="file-icon shrink-0 text-muted" aria-hidden="true">
+                      <button class="navtree-link gap-2xs pad-left-md row ycenter gap-xs wfull pad-x-sm pad-y-2xs ta-l cursor-pointer" onclick={() => handleOpenFile(file.path)}>
+                        <span class="shrink-0 text-muted" aria-hidden="true">
                           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><rect x="2" y="1" width="10" height="12" rx="1.5"/><line x1="4.5" y1="4" x2="9.5" y2="4"/><line x1="4.5" y1="6.5" x2="8" y2="6.5"/><line x1="4.5" y1="9" x2="9" y2="9"/></svg>
                         </span>
                         <span class="box gap-3xs grow min0">
@@ -300,12 +319,12 @@
                       </button>
                     {/each}
                   {:else}
-                    <div class="folder-loading-inline pad-x-md pad-y-2xs text-xs text-muted">Loading…</div>
+                    <div class="pad-x-md pad-y-2xs text-xs text-muted">Loading…</div>
                   {/if}
                 {/if}
               </div>
             {/each}
-            <button class="button ghost text-sm align-self-start add-folder-btn" onclick={handleAddFolder}>
+            <button class="button ghost text-sm align-self-start is-ghost row ycenter gap-3xs" onclick={handleAddFolder}>
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" class="shrink-0"><line x1="6" y1="2" x2="6" y2="10"/><line x1="2" y1="6" x2="10" y2="6"/></svg>
               Add folder
             </button>
@@ -313,16 +332,16 @@
 
         {:else}
           {#if plansLoading}
-            <div class="empty-list box ycenter xcenter pad-y-xl text-muted text-sm">Loading plans…</div>
+            <div class="row wrap gap-2xs box ycenter xcenter pad-y-xl text-muted text-sm">Loading plans…</div>
           {:else if plans.length === 0}
-            <div class="empty-list box ycenter xcenter gap-3xs pad-y-xl tt-c">
-              <p class="text-muted text-sm m-0">No Claude Code plans found</p>
+            <div class="row wrap gap-2xs box ycenter xcenter gap-3xs pad-y-xl">
+              <p class="text-muted text-sm">No Claude Code plans found</p>
               <span class="text-xs text-muted">Plans are stored in ~/.claude/plans/</span>
             </div>
           {:else}
             {#each plans as plan (plan.path)}
-              <button class="file-item row ycenter gap-xs wfull pad-x-sm pad-y-2xs text-left cursor-pointer" onclick={() => handleOpenFile(plan.path)}>
-                <span class="file-icon shrink-0 text-muted" aria-hidden="true">
+              <button class="navtree-link gap-2xs row ycenter gap-xs wfull pad-x-sm pad-y-2xs ta-l cursor-pointer" onclick={() => handleOpenFile(plan.path)}>
+                <span class="shrink-0 text-muted" aria-hidden="true">
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><rect x="2" y="1" width="10" height="12" rx="1.5"/><polyline points="5,5 6.5,6.5 9,4"/><line x1="4.5" y1="8.5" x2="9.5" y2="8.5"/><line x1="4.5" y1="10.5" x2="8" y2="10.5"/></svg>
                 </span>
                 <span class="box gap-3xs grow min0">
@@ -335,6 +354,5 @@
           {/if}
         {/if}
       </div>
-    </div>
   </div>
-{/if}
+</dialog>

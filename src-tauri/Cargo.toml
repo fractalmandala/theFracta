@@ -28,6 +28,24 @@ notify = { version = "7", features = ["macos_fsevent"] }
 notify-debouncer-mini = "0.5"
 tauri-plugin-process = "2"
 tauri-plugin-window-state = "2"
+# Signal handling for sidecar cleanup — see sidecar.rs. Already in the tree
+# transitively; named here because we call into it directly.
+libc = "0.2"
+# The notes vault index. `bundled` is required rather than optional: it is what
+# compiles SQLite with SQLITE_ENABLE_FTS5, which the system libsqlite3 on macOS
+# does not reliably ship, and full-text search is the point of the index.
+rusqlite = { version = "0.32", features = ["bundled"] }
+# Directory walking with the symlink-cycle and filesystem-boundary guards the
+# hand-rolled recursion in commands.rs lacks.
+walkdir = "2"
+
+# Enumerating installed fonts for the appearance settings. The web platform's
+# Local Font Access API (queryLocalFonts) is Chromium-only — WebKit does not
+# implement it — so the app's own WKWebView cannot ask for this and the list has
+# to come from the native side.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-core-text = { version = "0.3", features = ["CTFontManager"] }
+objc2-core-foundation = { version = "0.3", features = ["CFArray", "CFString"] }
 
 [dev-dependencies]
 # `test` enables Tauri's mock runtime (tauri::test) used by the menu test.

@@ -147,7 +147,7 @@
 	});
 </script>
 
-<div class="graph-canvas relative wfull hfull">
+<div class="grow h-192 relative wfull hfull">
 	<SvelteFlow nodes={flowNodes} edges={flowEdges} {nodeTypes} fitView minZoom={0.1} maxZoom={2.5}>
 		<Background variant={BackgroundVariant.Dots} gap={16} size={1} />
 		<Controls />
@@ -155,7 +155,7 @@
 	</SvelteFlow>
 
 	{#if isComputing}
-		<div class="graph-computing absolute row ycenter gap-2xs bg-popover border pad-x-2xs pad-y-3xs radius-md shadow-md text-xs">
+		<div class="text-muted text-sm absolute row ycenter gap-2xs bg-popover border pad-x-2xs pad-y-3xs radius-md shadow-md text-xs">
 			<div class="spinner" aria-hidden="true"></div>
 			<span>Computing layout…</span>
 		</div>

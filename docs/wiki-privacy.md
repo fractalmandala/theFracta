@@ -1,3 +1,11 @@
+---
+title: Wiki privacy boundary
+description: Contract separating private wiki articles and transcripts from anything committed.
+tags:
+  - privacy
+  - wiki
+---
+
 # Wiki Privacy Boundary
 
 This document defines the boundary between what lives in the public
@@ -14,34 +22,63 @@ The boundary is enforced at three layers — git, build, runtime — so
 that even a careless commit, a sloppy script, or a misconfigured agent
 cannot leak transcript bytes into the public repo.
 
+## Amendment 2026-09-05 (decision D010): private by default
+
+Phase 1 of the wiki implementation changed the default boundary. Wiki
+articles are **private user data** and are never committed:
+
+- The article store lives in the app folder's Git-ignored `wiki/`
+  directory. The desktop shell resolves it as the `FRACTA_WIKI_ROOT`
+  override, then the in-app `wiki/` directory, then `~/.fracta/wiki`.
+- The fabricated in-source registry seed was removed. There is no
+  committed `registry.json` and no committed `entries/` directory.
+- The machine-local chat corpus is the Fractorches service archive,
+  read through its recall HTTP API, not a locally built JSONL store.
+- The "published to the repo" flow below is retired. The chat-ref and
+  snippet-budget rules remain the contract for any future, explicitly
+  user-initiated publication flow; nothing is published automatically.
+
+Draft compilation (decision D011) sends the selected recall entries'
+distilled bodies to the generation path configured in the Fractorches
+service — the same boundary the service's recall extraction and insights
+already operate under. The compile handler is read-only over the archive and
+persists nothing; the reviewed draft lands only in the Git-ignored article
+store. No article content, transcript, or corpus data is committed or
+published by compiling.
+
+The remaining sections keep their original text where they describe the
+chat-reference structure, snippet budgets, guard lists, and the
+shareable article form; they apply from the moment an explicit publish
+step exists.
+
 ## What lives where
 
-### Public (`theFracta` repo on GitHub)
+### Committed app source
 
-The wiki module lives here. The registry, entries, and UI are all
-public. Everything in this repo is *descriptions of chats*, not
-chats themselves.
+The wiki module UI and its state code live here. Under the 2026-09-05
+amendment, the registry and article entries are **not** committed; they
+belong to the machine-local store below.
 
 | Asset | Lives in | Format |
 | --- | --- | --- |
-| Wiki registry (the list of entries) | `theFracta/src/lib/wiki/registry.json` | JSON |
-| Wiki entry bodies (the markdown) | `theFracta/src/lib/wiki/entries/<id>.md` | Markdown with frontmatter |
-| Wiki module UI | `theFracta/src/lib/modules/wiki/` | Svelte |
-| Wiki state + types | `theFracta/src/lib/wiki/` | TypeScript |
+| Wiki module UI | `src/lib/modules/wiki/` | Svelte |
+| Wiki state + types | `src/lib/wiki/` | TypeScript |
 
 ### Machine-local (only on your machine, never committed)
 
 | Asset | Lives in | Format |
 | --- | --- | --- |
-| Normalized chat corpus | `~/.fracta/wiki/corpus/` | JSONL |
-| Source transcripts (read-only symlinks/aliases) | `~/.claude/projects/`, `~/.codex/sessions/`, etc. | JSONL/SQLite (untouched) |
+| Wiki article store (entries as markdown) | `<app>/wiki/entries/<id>.md` (Git-ignored) | Markdown with frontmatter |
+| Chat corpus (normalized, queryable) | Fractorches service archive | Recall HTTP API `/api/v1/recall/entries` |
+| Source transcripts (read-only) | Fractorches-managed provider directories | JSONL/SQLite (untouched) |
 | Per-chat extracted snippets for cited entries | `~/.fracta/wiki/snippets/<entry-id>/<chat-ref>.txt` | Text files, ≤ 2 KiB each |
 | Local chat-ref resolver index | `~/.fracta/wiki/index.sqlite` | SQLite |
 | Ingest cache (rebuilt on demand) | `~/.fracta/wiki/cache/` | JSON |
 
-The corpus is **never under any path that git can reach.** The wiki
-module reads it via an explicit OS-level path the user provides —
-no defaults, no fallbacks to the working directory.
+The chat corpus is never under a path that git can reach; the wiki
+module reads it only through the Fractorches service API. The article
+store sits inside the app folder but is excluded by `.gitignore`, so
+article files are never tracked (decision D010).
 
 ## The chat reference model
 
@@ -90,7 +127,7 @@ The wiki entry's body in the repo refers to a snippet by `<agent>:<uuid>:<offset
 *only when rendering for the local user*. **The repo file contains
 the citation pointer, never the quoted bytes.**
 
-## What the repo must never contain
+## What committed files must never contain
 
 A single guard list, kept short on purpose:
 

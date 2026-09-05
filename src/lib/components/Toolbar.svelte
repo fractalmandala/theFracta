@@ -98,7 +98,7 @@
   }
 </script>
 
-<header class="toolbar sticky row ycenter xbetween gap-xs pad-x-sm pad-y-2xs surface-blur border-bottom min-h-lg">
+<header class="gap-2xs pad-y-3xs pad-x-xs surface sticky row ycenter xbetween gap-xs pad-x-sm pad-y-2xs backdrop-blur border-bottom">
 	<!-- Left: quick entry + current heading -->
 	<div class="row ycenter gap-xs grow min0">
 		<div class="row ycenter gap-2xs">
@@ -109,41 +109,41 @@
 			</button>
 		</div>
 		{#if $document.fileName && currentHeading}
-			<span class="current-heading text-sm text-muted truncate grow min0">{currentHeading}</span>
+			<span class="text-theme weight-600 text-sm text-muted truncate grow min0">{currentHeading}</span>
 		{/if}
 	</div>
 
 	<!-- Center: View · Split · Edit segmented control -->
 	<div class="row ycenter shrink-0">
-		<div class="mode-segmented" role="group" aria-label="View mode"
+		<div class="segmented" role="group" aria-label="View mode"
 			title={!$document.filePath
 				? 'View · Split · Edit (open a file first)'
 				: !canEdit
 				? 'Split and Edit are only available for local files'
 				: 'View · Split · Edit'}>
-			<button class="mode-seg" class:mode-active={editMode === 'view'} onclick={() => onSetMode('view')} disabled={!$document.filePath}>View</button>
-			<button class="mode-seg" class:mode-active={editMode === 'split'} onclick={() => onSetMode('split')} disabled={!canEdit}>Split</button>
-			<button class="mode-seg" class:mode-active={editMode === 'edit'} onclick={() => onSetMode('edit')} disabled={!canEdit}>Edit</button>
+			<button class="segmented-item" class:active={editMode === 'view'} onclick={() => onSetMode('view')} disabled={!$document.filePath}>View</button>
+			<button class="segmented-item" class:active={editMode === 'split'} onclick={() => onSetMode('split')} disabled={!canEdit}>Split</button>
+			<button class="segmented-item" class:active={editMode === 'edit'} onclick={() => onSetMode('edit')} disabled={!canEdit}>Edit</button>
 		</div>
 	</div>
 
 	<!-- Right: reading controls, raw, present, save, copy, export, settings -->
 	<div class="row ycenter gap-3xs shrink-0">
-		<button onclick={toggleToc} class="button is-icon" class:tool-active={$tocVisible}
+		<button onclick={toggleToc} class="button is-icon" class:text-theme={$tocVisible}
 			disabled={!$document.renderedHtml || $tocEntries.length === 0 || isEditing}
 			title={!$document.renderedHtml ? 'Table of Contents (open a file first)' : isEditing ? 'Table of Contents (exit edit mode to use)' : $tocEntries.length === 0 ? 'Table of Contents (no headings in this document)' : 'Table of Contents'}
 			aria-label="Toggle Table of Contents">
 			<svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="4" x2="14" y2="4"/><line x1="2" y1="8" x2="10" y2="8"/><line x1="2" y1="12" x2="12" y2="12"/></svg>
 		</button>
 
-		<button onclick={toggleReaderControls} class="button is-icon" class:tool-active={showReaderControls}
+		<button onclick={toggleReaderControls} class="button is-icon" class:text-theme={showReaderControls}
 			disabled={!$document.renderedHtml}
 			title={$document.renderedHtml ? 'Reading preferences (Aa)' : 'Reading preferences (open a file first)'}
 			aria-label="Reading preferences">
 			<svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><text x="1" y="12" font-size="12" font-weight="700" stroke="none" fill="currentColor" font-family="-apple-system, BlinkMacSystemFont, sans-serif">Aa</text></svg>
 		</button>
 
-		<button onclick={toggleWidthMode} class="button is-icon" class:tool-active={$settings.widthMode === "wide"}
+		<button onclick={toggleWidthMode} class="button is-icon" class:text-theme={$settings.widthMode === "wide"}
 			disabled={!$document.renderedHtml}
 			title={!$document.renderedHtml ? 'Toggle wide view (open a file first)' : $settings.widthMode === "wide" ? 'Use comfortable width' : 'Use wide viewport'}
 			aria-label={$settings.widthMode === "wide" ? 'Use comfortable width' : 'Use wide viewport'}>
@@ -153,7 +153,7 @@
 			</svg>
 		</button>
 
-		<button onclick={onRawToggle} class="button is-icon" class:tool-active={rawMode}
+		<button onclick={onRawToggle} class="button is-icon" class:text-theme={rawMode}
 			disabled={!$document.renderedHtml || isEditing}
 			title={!$document.renderedHtml ? 'View raw markdown (open a file first)' : isEditing ? 'View raw markdown (exit edit mode to use)' : 'View raw markdown (Cmd+U)'}
 			aria-label="View raw markdown">
@@ -161,19 +161,19 @@
 		</button>
 
 		{#if canPresent}
-			<button onclick={onTogglePresent} class="button is-icon" class:tool-active={presenting}
+			<button onclick={onTogglePresent} class="button is-icon" class:text-theme={presenting}
 				title={presenting ? 'Exit presentation (Esc)' : 'Present slideshow'}
 				aria-label={presenting ? 'Exit presentation' : 'Present slideshow'}>
 				<svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="13" height="9" rx="1"/><line x1="6" y1="14" x2="10" y2="14"/><line x1="8" y1="11.5" x2="8" y2="14"/></svg>
 			</button>
 		{/if}
 
-		<button onclick={onSave} class="button is-icon save-btn" class:save-dirty={dirty}
+		<button onclick={onSave} class="button is-icon is-ghost row ycenter gap-3xs" class:text-warning={dirty}
 			disabled={!dirty}
 			title={dirty ? 'Save unsaved changes (Cmd+S)' : 'Save (no changes to save)'}
 			aria-label="Save">
 			<svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h8l2 2v8H3z"/><path d="M5 3v4h6V3"/><rect x="5" y="9" width="6" height="4"/></svg>
-			{#if dirty}<span class="dirty-dot absolute" aria-hidden="true"></span>{/if}
+			{#if dirty}<span class="w-6 h-6 radius-32 shrink-0 absolute bg-warning" aria-hidden="true"></span>{/if}
 		</button>
 
 		<div class="relative">
@@ -182,19 +182,19 @@
 				title={!$document.renderedHtml ? 'Copy content (open a file first)' : isEditing ? 'Copy content (exit edit mode to use)' : 'Copy content'}
 				aria-label="Copy content">
 				{#if copyFeedback}
-					<span class="copy-feedback text-xs weight-500 text-primary">{copyFeedback}</span>
+					<span class="text-xs weight-500 text-primary">{copyFeedback}</span>
 				{:else}
 					<svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
 				{/if}
 			</button>
 
 			{#if showCopyMenu}
-				<div class="dropdown popover-shadow fixed bg border pad-3xs">
-					<button onclick={handleCopyRichText} class="dropdown-item row ycenter xbetween gap-2xs wfull text-sm">
+				<div class="popover open fixed pad-3xs">
+					<button onclick={handleCopyRichText} class="navtree-link xbetween gap-2xs wfull">
 						<span>Rich Text</span>
 						<span class="text-xs text-muted">for Docs / Notion</span>
 					</button>
-					<button onclick={handleCopyMarkdown} class="dropdown-item row ycenter xbetween gap-2xs wfull text-sm">
+					<button onclick={handleCopyMarkdown} class="navtree-link xbetween gap-2xs wfull">
 						<span>Markdown</span>
 						<span class="text-xs text-muted">raw source</span>
 					</button>
@@ -209,7 +209,7 @@
 			<svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2h6l3 3v9H4z"/><path d="M10 2v3h3"/><polyline points="6,9 8,11 10,9"/><line x1="8" y1="7" x2="8" y2="11"/></svg>
 		</button>
 
-		<span aria-hidden="true" class="separator" ></span>
+		<span aria-hidden="true" class="border-left hfull"></span>
 
 		<button onclick={() => { closeAll(); onOpenSettings(); }} class="button is-icon"
 			title="Settings (Cmd+,)" aria-label="Settings">

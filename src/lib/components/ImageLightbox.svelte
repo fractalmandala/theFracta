@@ -51,15 +51,15 @@
 {#if visible}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="lightbox fixed inset-0 box ycenter xcenter pad-md z-modal" role="dialog" aria-modal="true" aria-label="Image preview" tabindex="-1" onclick={handleBackdrop} onkeydown={handleLightboxKeydown}>
-    <button class="lb-close absolute is-icon text-inverse cursor-pointer" aria-label="Close image preview" onclick={close}>
+    <button class="is-ghost absolute is-icon text-inverse cursor-pointer" aria-label="Close image preview" onclick={close}>
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="4" y1="4" x2="16" y2="16"/><line x1="16" y1="4" x2="4" y2="16"/></svg>
     </button>
 
     {#if images.length > 1}
-      <button class="lb-nav absolute is-icon text-inverse cursor-pointer" aria-label="Previous image" onclick={prev}>
+      <button class="is-ghost absolute is-icon text-inverse cursor-pointer" aria-label="Previous image" onclick={prev}>
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="13,4 7,10 13,16"/></svg>
       </button>
-      <button class="lb-nav lb-next absolute is-icon text-inverse cursor-pointer" aria-label="Next image" onclick={next}>
+      <button class="is-ghost absolute is-icon text-inverse cursor-pointer" aria-label="Next image" onclick={next}>
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="7,4 13,10 7,16"/></svg>
       </button>
       <div class="lb-counter absolute text-sm text-inverse-muted tabular-nums">{index + 1} / {images.length}</div>

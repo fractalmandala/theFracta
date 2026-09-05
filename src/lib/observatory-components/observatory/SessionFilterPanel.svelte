@@ -1,18 +1,19 @@
 <script lang="ts">
+	import { railState } from '$lib/states/railState.svelte';
 	import { observatory } from '$lib/observatory-state/observatory.svelte';
 
 	let agentCounts = $derived(observatory.agentCounts);
 	let availableAgents = $derived(observatory.availableAgents.filter((a) => a !== 'all'));
 </script>
 
-<div class="filter-panel box gap-sm pad-sm">
+<div class="surface scroll-y box gap-sm pad-sm">
 		<header class="row ycenter xbetween pad-y-2xs border-bottom">
 			<span class="text-sm weight-600">Filters</span>
-			<button class="button is-icon text-muted" onclick={() => observatory.filterPanelOpen = false} aria-label="Close filters">×</button>
+			<button class="button is-icon text-muted" onclick={() => railState.setCollapsed('obs-filters', true)} aria-label="Close filters">×</button>
 		</header>
 
 		<section class="box gap-3xs pad-y-2xs">
-			<h4 class="filter-label text-xs weight-600 tt-u text-muted m-0">Display</h4>
+			<h4 class="tracking-wider text-xs weight-600 tt-u text-muted">Display</h4>
 			<div class="box gap-3xs">
 				<label class="row ycenter gap-2xs text-sm cursor-pointer">
 					<input type="radio" name="groupBy" value="" bind:group={observatory.groupBy} />
@@ -30,7 +31,7 @@
 		</section>
 
 		<section class="box gap-3xs pad-y-2xs">
-			<h4 class="filter-label text-xs weight-600 tt-u text-muted m-0">Starred</h4>
+			<h4 class="tracking-wider text-xs weight-600 tt-u text-muted">Starred</h4>
 			<label class="row ycenter gap-2xs text-sm cursor-pointer">
 				<input type="checkbox" bind:checked={observatory.starredOnly} />
 				<span>Starred only</span>
@@ -38,7 +39,7 @@
 		</section>
 
 		<section class="box gap-3xs pad-y-2xs">
-			<h4 class="filter-label text-xs weight-600 tt-u text-muted m-0">Activity</h4>
+			<h4 class="tracking-wider text-xs weight-600 tt-u text-muted">Activity</h4>
 			<label class="row ycenter gap-2xs text-sm cursor-pointer">
 				<input type="checkbox" bind:checked={observatory.recentlyActive} />
 				<span>Recently active</span>
@@ -46,7 +47,7 @@
 		</section>
 
 		<section class="box gap-3xs pad-y-2xs">
-			<h4 class="filter-label text-xs weight-600 tt-u text-muted m-0">Session type</h4>
+			<h4 class="tracking-wider text-xs weight-600 tt-u text-muted">Session type</h4>
 			<label class="row ycenter gap-2xs text-sm cursor-pointer">
 				<input type="checkbox" bind:checked={observatory.hideSingleTurn} />
 				<span>Hide single-turn</span>
@@ -58,7 +59,7 @@
 		</section>
 
 		<section class="box gap-3xs pad-y-2xs">
-			<h4 class="filter-label text-xs weight-600 tt-u text-muted m-0">Project</h4>
+			<h4 class="tracking-wider text-xs weight-600 tt-u text-muted">Project</h4>
 			<label class="row ycenter gap-2xs text-sm cursor-pointer">
 				<input type="checkbox" bind:checked={observatory.hideUnknown} />
 				<span>Hide unknown</span>
@@ -67,7 +68,7 @@
 
 		{#if availableAgents.length > 0}
 			<section class="box gap-3xs pad-y-2xs">
-				<h4 class="filter-label text-xs weight-600 tt-u text-muted m-0">Agent</h4>
+				<h4 class="tracking-wider text-xs weight-600 tt-u text-muted">Agent</h4>
 				<div class="box gap-3xs">
 					{#each availableAgents as agent}
 						<label class="row ycenter gap-2xs text-sm cursor-pointer">
@@ -85,7 +86,7 @@
 								}}
 							/>
 							<span class="tt-u">{agent}</span>
-							<span class="text-3xs text-muted">({agentCounts.get(agent) || 0})</span>
+							<span class="text-2xs text-muted">({agentCounts.get(agent) || 0})</span>
 						</label>
 					{/each}
 				</div>

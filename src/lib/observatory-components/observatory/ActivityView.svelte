@@ -6,8 +6,8 @@
 <section class="box gap-md pad-md">
 	<header class="box gap-3xs">
 		<p class="eyebrow text-xs">Calendar activity</p>
-		<h2 class="text-lg weight-600 m-0">Activity</h2>
-		<p class="muted text-sm m-0">Calendar-day buckets use the selected local timezone and active Fractorches filter.</p>
+		<h2 class="text-lg weight-600">Activity</h2>
+		<p class="text-muted text-sm">Calendar-day buckets use the selected local timezone and active Fractorches filter.</p>
 	</header>
 
 	<div class="card border overflow-hidden">
@@ -31,8 +31,8 @@
 	</div>
 
 	<section class="box gap-2xs">
-		<h3 class="text-sm weight-600 m-0">Hour of week</h3>
-		<ol class="reset-list box gap-3xs">
+		<h3 class="text-sm weight-600">Hour of week</h3>
+		<ol class="box gap-3xs unstyled">
 			{#each observatory.hourlyMatrix as cell (`${cell.day_of_week}-${cell.hour}`)}
 				<li class="text-sm pad-x-2xs pad-y-3xs border-bottom text-muted">
 					Day {cell.day_of_week}, {cell.hour}:00 — <strong class="text-primary">{cell.messages}</strong> messages

@@ -9,7 +9,7 @@
 </script>
 
 {#if activeFlow}
-	<aside class="flow-player card border pad-sm box gap-3xs" aria-label="Flow player">
+	<aside class="row ycenter gap-xs pad-y-2xs pad-x-xs border-top footer card border pad-sm box gap-3xs" aria-label="Flow player">
 		<header class="row ycenter xbetween gap-2xs border-bottom pad-bottom-2xs">
 			<div class="row ycenter gap-2xs">
 				<span class="badge">Flow</span>
@@ -21,7 +21,7 @@
 		{#if activeFlow.trigger}
 			<div class="row ycenter gap-2xs text-xs text-muted pad-y-2xs">
 				<span class="tt-u weight-600">Trigger</span>
-				<code class="trigger-code">{activeFlow.trigger}</code>
+				<code class="mono text-xs surface radius-2 pad-x-3xs">{activeFlow.trigger}</code>
 			</div>
 		{/if}
 
@@ -31,7 +31,7 @@
 				disabled={graphState.activeFlowStepIndex === 0}
 				onclick={() => graphState.prevFlowStep()}
 			>◀ Prev</button>
-			<div class="box gap-3xs tt-c grow min0">
+			<div class="box gap-3xs grow min0 ta-c">
 				<span class="text-xs text-muted">Step {graphState.activeFlowStepIndex + 1} of {totalSteps}</span>
 				<span class="text-sm weight-500 truncate">{currentStep}</span>
 			</div>
@@ -43,7 +43,7 @@
 		</div>
 
 		{#if activeFlow.summary}
-			<p class="text-sm text-secondary m-0">{activeFlow.summary}</p>
+			<p class="text-sm text-secondary">{activeFlow.summary}</p>
 		{/if}
 	</aside>
 {/if}

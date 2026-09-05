@@ -16,12 +16,12 @@
 
   /**
    * The DOM element to highlight in non-edit modes: the rendered Markdown
-   * (`article.md-content`) or the raw-source `<pre>`. In edit mode neither exists —
+   * (`article.content-shell`) or the raw-source `<pre>`. In edit mode neither exists —
    * the document is a `<textarea>` whose contents aren't markable DOM text, so
    * the Editor component renders its own highlight backdrop instead.
    */
   function getViewTarget(): HTMLElement | null {
-    return document.querySelector<HTMLElement>("article.md-content, pre.raw-source");
+    return document.querySelector<HTMLElement>("article.content-shell, pre.raw-source");
   }
 
   function clearMarks() {
@@ -143,10 +143,10 @@
 			bind:value={$searchQuery}
 			type="text"
 			placeholder="Find in document…"
-			class="search-input bg-transparent border-0 text-sm text-primary"
+			class="min-w-120 text-sm text-primary blank"
 		/>
 
-		<span class="search-count text-xs text-muted shrink-0 tabular-nums">
+		<span class="mono text-xs text-muted shrink-0 tabular-nums">
 			{#if $searchTotal > 0}
 				{$searchActiveIndex + 1}/{$searchTotal}
 			{:else if $searchQuery.trim()}
@@ -154,16 +154,16 @@
 			{/if}
 		</span>
 
-		<div class="search-nav row gap-3xs">
-			<button onclick={prevMatch} disabled={$searchTotal === 0} class="search-nav-btn is-icon text-secondary" title="Previous (Shift+Enter)" aria-label="Previous match">
+		<div class="gap-1 row gap-3xs">
+			<button onclick={prevMatch} disabled={$searchTotal === 0} class="is-ghost is-icon text-secondary" title="Previous (Shift+Enter)" aria-label="Previous match">
 				<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><polyline points="2,8 6,4 10,8"/></svg>
 			</button>
-			<button onclick={nextMatch} disabled={$searchTotal === 0} class="search-nav-btn is-icon text-secondary" title="Next (Enter)" aria-label="Next match">
+			<button onclick={nextMatch} disabled={$searchTotal === 0} class="is-ghost is-icon text-secondary" title="Next (Enter)" aria-label="Next match">
 				<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><polyline points="2,4 6,8 10,4"/></svg>
 			</button>
 		</div>
 
-		<button onclick={close} class="search-close is-icon text-muted" title="Close (Esc)" aria-label="Close search">
+		<button onclick={close} class="is-ghost is-icon text-muted" title="Close (Esc)" aria-label="Close search">
 			<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="2" x2="10" y2="10"/><line x1="10" y1="2" x2="2" y2="10"/></svg>
 		</button>
 	</div>

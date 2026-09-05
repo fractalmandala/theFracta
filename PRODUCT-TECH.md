@@ -163,6 +163,51 @@ listing, opens a pinned and a recent file, removes shortcuts without touching
 data, opens two tabs with independent edits, saves an unsaved note, and confirms
 the read/raw/edit/split and rich Markdown flows remain functional.
 
+### 7.2 Wiki surface and private article store
+
+The Wiki surface maintains local knowledge articles over the Fractorches
+recall corpus (decision D010, behavior B26). A Rust wiki module resolves the
+article root as the `FRACTA_WIKI_ROOT` override, then the app folder's
+Git-ignored `wiki/` directory, then `~/.fracta/wiki`; it creates only the
+missing `entries/` directory and never deletes or rewrites an existing store.
+Article listing, reading, and writing run through Tauri commands. Articles are
+Markdown with a strict frontmatter (identity, title, type, status, summary,
+tags, chat citations, timestamps); malformed files are skipped and counted,
+never rendered half-valid.
+
+The corpus browser is fed exclusively by the Fractorches recall HTTP API: the
+frontend client pages `/recall/entries` with server-side text, type, and
+review-state filters and reports truncation past its client cap. Corpus
+entries render review state, trigger, uncertainty, model confidence, and a
+source-session citation that opens the real session in the Observatory
+transcript viewer. No provider transcript is parsed outside the service,
+satisfying B4 and B5.
+
+Wiki state uses Svelte 5 runes classes for the article store, the corpus
+state, and a shared view facade. Every value on the surface is measured from
+the article store or the corpus, with distinct loading, empty, unavailable,
+error, and truncated states (B8, B9, B10, B25, B26). Verification covers
+entry-format unit tests, the Rust store tests, `svelte-check`, the production
+build, and the privacy gate.
+
+Draft compilation (decision D011) reuses the service's generation machinery
+instead of adding a client-side model path. The service exposes
+`GET /api/v1/wiki/compile/status`, which reports availability it has actually
+probed (the configured OpenAI-compatible insights endpoint, or insight agent
+CLIs resolved on PATH), and `POST /api/v1/wiki/compile`, which loads the
+requested recall entries read-only, rejects unknown or archived/superseded
+ids, and prompts the model to ground every claim in the entries with
+`[recall:<id>]` citations and an explicit "(unverified)" marker where
+provenance is not verified. The response carries the draft markdown plus
+per-entry provenance; the handler persists nothing. The frontend compile
+panel shows the probed availability, the selected cluster, and the service's
+error messages verbatim; a draft lands in the private article store only
+after the user reviews the rendered markdown, its grounding provenance, and
+the draft type. Saved drafts record `compiledFrom` (the grounding recall
+entry ids) and `compiledAt`; a freshness check compares `compiledAt` against
+the grounding entries in the loaded corpus view and reports fresh, stale
+(which entries changed), or untestable — never a guessed verdict.
+
 ### 8. Styling, theming, and icons
 
 Install Sass in each application with `pnpm add -D sass`. Record the imported
@@ -192,6 +237,180 @@ Production sources and built navigation are checked for:
 A scanner finding is reviewed rather than blindly ignored. Legitimate fixture
 and test uses must be explicitly scoped outside production bundles. This gate
 enforces B8, B9, B10, B21, B24, and B25.
+
+### 10. Agents surface — slice 1: Gemini CLI chats
+
+Implements the Agents Surface section of `PRODUCT.md` (first slice): real
+Gemini CLI chats in the one window, scoped per project folder, with explicit
+user approvals, recorded by the canonical Fractorches archive. The numbered
+invariants in that section are referenced here as (P1)–(P15).
+
+#### Context
+
+Facts this plan rests on (verified 2026-09-05):
+
+- `gemini` 0.40.1 at `/opt/homebrew/bin/gemini` supports `--acp`: the Agent
+  Client Protocol, JSON-RPC over stdio — the same interface Zed's agent panel
+  speaks. Driving it needs no PTY and no terminal scraping. Antigravity state
+  lives under `~/.gemini/antigravity-cli`; it is not the slice-1 binary.
+- Fractorches already parses Gemini CLI transcripts
+  (`services/fractorches/internal/parser`: `AgentGemini`, `GeminiSessionID`,
+  Gemini fixtures), so chats conducted here appear in the Bench under the real
+  gemini provider identity with zero new parser work (P12).
+- The Gemini CLI owns its session store under `~/.gemini`; Fracta stores only
+  pointers and proves resume by asking the agent (P9).
+
+The shell already declares the seam this slice opens:
+
+- `AppView` already contains `'agents'`, gated out of rendering by
+  `BUILT_VIEWS` —
+  [`src/lib/states/windowState.svelte.ts:2-10 @ 60cf072`](https://github.com/fractalmandala/theFracta/blob/60cf07249948e33d2ae7553c1298c561359fd105/src/lib/states/windowState.svelte.ts#L2-L10).
+  The slice adds `'agents'` to `BUILT_VIEWS`.
+- The switcher is a `surfaces` array with a ⌘N handler regexed to `1-3` —
+  [`src/routes/+layout.svelte:29-33 @ 60cf072`](https://github.com/fractalmandala/theFracta/blob/60cf07249948e33d2ae7553c1298c561359fd105/src/routes/+layout.svelte#L29-L33),
+  [`58-64 @ 60cf072`](https://github.com/fractalmandala/theFracta/blob/60cf07249948e33d2ae7553c1298c561359fd105/src/routes/+layout.svelte#L58-L64).
+  The slice adds the entry, widens the regex to `1-4`, and mounts the module
+  the same way Notes/Bench/Wiki mount (P1).
+- Commands register in `lib.rs` `generate_handler` and are plain functions
+  returning `Result<T, String>` —
+  [`src-tauri/src/lib.rs:88-109 @ 60cf072`](https://github.com/fractalmandala/theFracta/blob/60cf07249948e33d2ae7553c1298c561359fd105/src-tauri/src/lib.rs#L88-L109).
+- Process ownership precedent: `sidecar.rs` holds its spawned child in
+  `Mutex<Option<Child>>` and kills+waits it on `RunEvent::Exit` —
+  [`src-tauri/src/sidecar.rs:16-95 @ 60cf072`](https://github.com/fractalmandala/theFracta/blob/60cf07249948e33d2ae7553c1298c561359fd105/src-tauri/src/sidecar.rs#L16-L95).
+  Agent sessions follow the same pattern per process, plus `Drop` cleanup.
+- Quit already routes through the frontend guard `window.__fracta_quit`
+  (close-requested and menu quit) —
+  [`src-tauri/src/lib.rs:117-130 @ 60cf072`](https://github.com/fractalmandala/theFracta/blob/60cf07249948e33d2ae7553c1298c561359fd105/src-tauri/src/lib.rs#L117-L130).
+  The active-session quit warning (P10) extends that guard.
+
+#### Proposed changes
+
+Rust — `src-tauri/src/agents/` (new module):
+
+- `AgentState` (managed) owns the session map and enforces the cap of three
+  concurrent sessions (P7).
+- Each `AgentSession` owns the spawned `gemini --acp` child (piped stdio,
+  `cwd` = project path), a writer for JSON-RPC requests, and a reader thread
+  that parses newline-delimited JSON-RPC and forwards typed events to the
+  webview via `app.emit`. `std::process` + std threads, mirroring
+  `sidecar.rs`; no async runtime is introduced.
+- Hand-rolled ACP subset only: `initialize`, `session/new`, `session/prompt`,
+  `session/update` (text deltas, tool calls), `session/request_permission`,
+  `session/cancel`, `session/load`. No protocol crate; the dialect is pinned
+  by fixtures.
+- Commands: `agents_start(project_path)` (cap check, spawn, initialize →
+  session id), `agents_prompt`, `agents_respond_permission`, `agents_cancel_turn`,
+  `agents_close`, `agents_resumable(project_path)`, `agents_resume` (via
+  `session/load`). Errors return verbatim strings for the UI to show (P3, P11).
+- Pointer store: a small JSON file in the app config directory recording
+  project path, CLI session id, and timestamps per session. It is a pointer
+  cache, not a transcript; the CLI's store stays canonical and is never read
+  or parsed by Fracta (no transcript parsing outside Fractorches).
+- Lifecycle: `RunEvent::Exit` and `Drop` kill+wait every owned child (P10).
+  `agents_close` ends one session's process; its pointer remains for resume.
+
+Frontend:
+
+- `windowState`: add `'agents'` to `BUILT_VIEWS`; layout: entry, ⌘1-4, module
+  mount.
+- `src/lib/states/agentsState.svelte.ts`: runes store holding sessions by id —
+  phase (`starting` / `ready` / `streaming` / `waiting-approval` / `error` /
+  `failed` / `exited`), transcript entries (user prompts, accumulated assistant
+  text, tool cards, approval cards, verbatim errors), cap state, and the event
+  listener applying `agents-event` payloads. The store lives at app scope, not
+  module scope, so sessions keep running and transcripts catch up when the
+  user returns from another surface (P8).
+- `src/lib/modules/agents/`: session list grouped by project, chat pane with
+  streaming text, collapsed-by-default expandable tool cards (P5), approval
+  cards with Approve/Deny (P6), Stop (P4), and truthful empty, error, and
+  disabled-composer states (P3, P13). Composer enabled only when the session
+  can receive prompts.
+- Project picking reuses the dialog plugin already initialized
+  (`tauri_plugin_dialog`) the way Notes pinned folders do (P2).
+- Styling: new indented `.sass` authored against the Fractalstyler2 contract
+  with module-scoped classes; no component `<style>` blocks, no inline styles.
+  Shared contract files are touched only in coordination with the styling lane.
+- Capabilities: confirm the webview can `listen` to Rust-emitted events
+  (`core:event` permissions in `src-tauri/capabilities/`); grant narrowly if
+  absent.
+
+```mermaid
+sequenceDiagram
+  participant UI as Agents UI (webview)
+  participant R as agents module (Rust)
+  participant G as gemini --acp (owned child)
+  UI->>R: agents_start(projectPath)
+  R->>G: spawn (cwd=project), initialize, session/new
+  R-->>UI: ready (session id)
+  UI->>R: agents_prompt(text)
+  R->>G: session/prompt
+  G-->>R: session/update — text deltas, tool calls
+  R-->>UI: typed agents-event payloads
+  G-->>R: session/request_permission
+  R-->>UI: approval card
+  UI->>R: agents_respond_permission(decide)
+  R->>G: permission response
+```
+
+Tradeoffs:
+
+- `std::process` + threads over tokio: matches the existing sidecar pattern
+  and adds no runtime; ACP traffic is low-rate line JSON.
+- Hand-rolled ACP subset over a protocol crate: the slice uses seven methods;
+  a fixture-driven fake agent pins the dialect and catches CLI drift at test
+  time.
+- Pointer store over reading `~/.gemini` directly: the CLI's store format is
+  its own; resume validity is proven by `session/load`, not file inspection.
+
+#### Testing and validation
+
+- Rust: `cargo fmt`, `cargo clippy`, `cargo test`. Unit tests run the ACP
+  client against a fake agent binary speaking canned JSON-RPC from fixtures:
+  lifecycle happy path, permission round-trip, cancel mid-turn, malformed line
+  tolerance, child exit → failed state, cap enforcement, kill-on-close/exit.
+  Covers P3, P4, P5, P6, P7, P11.
+- Frontend: vitest over `agentsState` (phase transitions, delta accumulation,
+  approval application, cap message, true-empty new chat), `svelte-check`,
+  production build. Covers P3, P4, P7, P13.
+- Desktop acceptance (manual, real `gemini`, scratch project fixture): P1
+  switcher + ⌘4; P2 start via folder picker; P4 streamed answer and stop
+  mid-turn; P5 tool card expand; P6 approve and deny a real permission; P7
+  three sessions across two projects plus the truthful cap message; P8 switch
+  to Notes mid-run and return caught up; P9 close and resume with restored
+  history; P10 quit warning with active sessions and no orphaned `gemini`
+  processes afterward (checked with `ps`); P11 quota/429 error shown verbatim;
+  P12 the session visible in the Bench as a gemini session with messages and
+  usage; P14 keyboard pass over composer, cards, Stop, approve/deny; P15
+  folder-moved error path.
+- Release gate: the no-placeholder scan runs over the new module and built
+  navigation.
+
+#### Parallelization
+
+Not proposed for this slice. The Rust command/event contract and the UI that
+consumes it churn together during first implementation, so splitting them into
+lanes adds contract-sync overhead on a small vertical. Later work (Antigravity
+adapter, wiki/notes MCP bridge) is cleanly separable then.
+
+#### Risks
+
+- Gemini CLI ACP drift across versions: fixture tests pin the dialect; a CLI
+  update that breaks framing fails tests before shipping.
+- Orphaned processes on hard crash: kill+wait on `RunEvent::Exit` and `Drop`;
+  acceptance includes the `ps` check after forced quit. Escalate to
+  process-group kill on macOS if orphans appear.
+- Event volume: assistant deltas coalesce per frame on the frontend; tool
+  payloads are small. If volume grows, Rust-side coalescing is the follow-up —
+  never silent dropping.
+- Resume history: what `session/load` replays is the agent's choice; the UI
+  renders what the agent restores and never fabricates missing history
+  (P9, P13).
+
+#### Follow-ups
+
+- Slice 2 candidates: wiki/notes context for agents via extending the
+  read-only `agentsview mcp`; Antigravity as a second adapter; richer tool and
+  diff cards.
 
 ## Testing and validation
 
@@ -230,6 +449,9 @@ worktrees with non-overlapping ownership:
    (complete). It does not edit the Go service.
 4. **Integrator lane:** owns root configuration, specifications, records,
    dependency policy, cross-app verification, and integration order.
+5. **Wiki lane:** the private article store, corpus browser, and measured
+   telemetry over the Fractorches recall API (Phase 1). It does not edit the
+   Go service, Observatory views, or authored styles.
 
 Each lane commits coherent changes. The integrator reviews diffs, resolves
 contract questions, integrates one lane at a time, and runs full gates after

@@ -1,9 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { document } from "../stores/document";
-import { tabStore } from "../stores/tabs";
+import { beginOpen, clearOpenStatus, failOpen } from "../stores/document";
+import { draftOf, resolveExternalChange, tabStore, type Tab } from "../stores/tabs";
 import { renderFull } from "../renderer/pipeline";
+import { get } from "svelte/store";
 import { addRecentFile } from "../stores/recents";
 
 export async function readMarkdownFile(path: string): Promise<string> {
@@ -19,16 +20,7 @@ export async function openFile(path: string): Promise<void> {
   const fileName = absolutePath.split("/").pop() ?? absolutePath;
   const baseDir = getBaseDir(absolutePath);
 
-  document.set({
-    filePath: absolutePath,
-    fileName,
-    content: "",
-    renderedHtml: "",
-    frontmatter: null,
-    wordCount: 0,
-    loading: true,
-    error: null,
-  });
+  beginOpen(absolutePath, fileName);
 
   try {
     const content = await readMarkdownFile(absolutePath);
@@ -44,30 +36,14 @@ export async function openFile(path: string): Promise<void> {
     // user can start writing, instead of staring at a blank viewer (#52).
     if (content.trim() === "") tabStore.setEditing(tabId, true);
 
-    document.set({
-      filePath: absolutePath,
-      fileName,
-      content,
-      renderedHtml: result.html,
-      frontmatter: result.frontmatter,
-      wordCount: result.wordCount,
-      loading: false,
-      error: null,
-    });
+    // The tab above is the document; `document` derives from it. Clearing the
+    // open status is all that remains.
+    clearOpenStatus();
 
     addRecentFile(absolutePath, fileName);
     getCurrentWindow().setTitle(`${fileName} — Fracta Knowledge`).catch(() => {});
   } catch (err) {
-    document.set({
-      filePath: absolutePath,
-      fileName,
-      content: "",
-      renderedHtml: "",
-      frontmatter: null,
-      wordCount: 0,
-      loading: false,
-      error: `Failed to open file: ${err}`,
-    });
+    failOpen(absolutePath, fileName, `Failed to open file: ${err}`);
   }
 }
 
@@ -137,31 +113,70 @@ export async function openFileDialog(): Promise<void> {
   }
 }
 
+/**
+ * Take up a change made to the file on disk by something other than us.
+ *
+ * Three cases, decided by comparing the bytes rather than by timing:
+ *
+ * 1. **Disk matches what the tab already has.** This is our own write coming
+ *    back as a change event, or a touch that changed nothing. Do nothing. This
+ *    replaced a 1.5-second "was that us?" suppression window, which both missed
+ *    slow events and could swallow a real external change that arrived quickly.
+ * 2. **Disk matches the unsaved draft.** Somebody wrote what the user was
+ *    about to write. Adopt it, and the draft stops being unsaved.
+ * 3. **Disk and the unsaved draft disagree.** Two versions exist and only the
+ *    user can say which one is wanted, so both are held and autosave stops for
+ *    this file until they choose.
+ */
 export async function reloadCurrentFile(path: string): Promise<void> {
   try {
     const absolutePath = await resolvePath(path);
     const content = await readMarkdownFile(absolutePath);
+    const tab = get(tabStore.tabs).find((t) => t.filePath === absolutePath);
+    if (!tab) return;
+
+    const decision = resolveExternalChange(tab, content);
+    if (decision === "ignore") return;
+    if (decision === "conflict") {
+      tabStore.markConflict(absolutePath, content);
+      return;
+    }
+
     const baseDir = getBaseDir(absolutePath);
     const result = renderFull(content, baseDir);
-    const fileName = absolutePath.split("/").pop() ?? absolutePath;
-
     await allowAssets(result.assetPaths);
-
     tabStore.updateTabContent(absolutePath, content, result.html, result.frontmatter, result.wordCount);
-
-    document.set({
-      filePath: absolutePath,
-      fileName,
-      content,
-      renderedHtml: result.html,
-      frontmatter: result.frontmatter,
-      wordCount: result.wordCount,
-      loading: false,
-      error: null,
-    });
   } catch (err) {
     console.error("Failed to reload file:", err);
   }
+}
+
+/** Paths that name a real file, as opposed to a pasted, fetched or unsaved one. */
+export function isOnDisk(filePath: string): boolean {
+  return (
+    !!filePath &&
+    !filePath.startsWith("paste://") &&
+    !filePath.startsWith("url://") &&
+    !filePath.startsWith("new://")
+  );
+}
+
+/**
+ * Write a tab's draft to its own path.
+ *
+ * The single write path, shared by Cmd+S and by autosave, so the two cannot
+ * drift into saving different things. It refuses a document with no location —
+ * choosing one is a decision that belongs to an explicit save, never to a
+ * background write.
+ */
+export async function writeDraft(tab: Tab): Promise<void> {
+  if (!isOnDisk(tab.filePath)) throw new Error("This document has no location yet.");
+  const text = draftOf(tab);
+  await saveFile(tab.filePath, text);
+  const result = renderFull(text, tab.baseDir);
+  await allowAssets(result.assetPaths);
+  tabStore.markSaved(tab.id);
+  tabStore.updateTabContent(tab.filePath, text, result.html, result.frontmatter, result.wordCount);
 }
 
 export function getBaseDir(path: string): string {

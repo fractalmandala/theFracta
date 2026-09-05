@@ -160,18 +160,24 @@
     }
   }
 </script>
-<div class="editor-wrap fixed box ycenter bg" class:editor-split={split}>
-  <div class="editor-stack relative wfull hfull" class:with-gutter={showLineNumbers} style="--editor-max-width: {maxWidth}; --gutter-w: {gutterWidth};">
+<!--
+  A flex column that fills its track, or a two-column grid in split view. It
+  carries no position and no alignment of its own: the editor stack inside is
+  the positioning context, and centring the column would shrink-wrap it to the
+  textarea's intrinsic width.
+-->
+<div class="grow min0" class:box={!split} class:grid-2={split}>
+  <div class="box grow min0 relative wfull hfull" style="--editor-max-width: {maxWidth}; --gutter-w: {gutterWidth};">
     {#if showLineNumbers}
       <!-- Line-number gutter: a transparent mirror wrapping identically to the
            textarea; CSS counters on each line block render the numbers. -->
-      <div bind:this={gutterEl} class="editor-gutter absolute" aria-hidden="true"
+      <div bind:this={gutterEl} class="editor-layer editor-gutter with-gutter" aria-hidden="true"
         style="--editor-font-size: {fontSize}px; --editor-line-height: {lineHeight};"
       >{@html gutterHtml}</div>
     {/if}
     <!-- Highlight layer: mirrors the textarea text so search matches can be
          painted behind the transparent textarea. -->
-    <div bind:this={backdropEl} class="editor-backdrop absolute" class:with-gutter={showLineNumbers} aria-hidden="true"
+    <div bind:this={backdropEl} class="editor-layer editor-backdrop" class:with-gutter={showLineNumbers} aria-hidden="true"
       style="--editor-font-size: {fontSize}px; --editor-line-height: {lineHeight};"
     >{@html highlightHtml}</div>
     <textarea
@@ -183,7 +189,7 @@
       onclick={updateActiveLine}
       onfocus={updateActiveLine}
       onscroll={syncBackdropScroll}
-      class="editor absolute"
+      class="editor-layer editor"
       class:with-gutter={showLineNumbers}
       style="--editor-font-size: {fontSize}px; --editor-line-height: {lineHeight};"
       spellcheck="false"

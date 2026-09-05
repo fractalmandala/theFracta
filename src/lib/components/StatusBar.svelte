@@ -13,7 +13,7 @@
 </script>
 
 {#if $docStore.renderedHtml && $docStore.wordCount > 0}
-  <footer class="status-bar footer row ycenter xcenter gap-3xs pad-x-sm pad-y-2xs text-xs text-muted">
+  <footer class="shrink-0 gap-md pad-y-3xs border-top mono footer row ycenter xcenter gap-3xs pad-x-sm pad-y-2xs text-xs text-muted">
     <span>{$docStore.wordCount.toLocaleString()} words</span>
     <span aria-hidden="true" class="text-muted">&middot;</span>
     <span>{readingTime($docStore.wordCount)}</span>

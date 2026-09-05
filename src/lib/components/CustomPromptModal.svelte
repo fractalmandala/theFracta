@@ -76,13 +76,34 @@
       sending = false;
     }
   }
+  /**
+   * A native <dialog>, opened with showModal(). The browser owns the top layer,
+   * the focus trap, the inert background and Escape — all of which were either
+   * hand-rolled per dialog or simply missing. ::backdrop replaces the scrim.
+   */
+  let el = $state<HTMLDialogElement | null>(null);
+
+  $effect(() => {
+    if (!el) return;
+    if (visible && !el.open) el.showModal();
+    else if (!visible && el.open) el.close();
+  });
+
+  // A backdrop click lands on the dialog element itself; content is in a child.
+  function onBackdropClick(e: MouseEvent) {
+    if (e.target === el) visible = false;
+  }
+
 </script>
-{#if visible}
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="dialog-backdrop fixed inset-0 box ycenter xcenter pad-top-2xl" onclick={handleBackdropClick} onkeydown={handleKeydown}>
-    <div class="dialog-card card bg-dialog border box dialog-h-screen dialog-md">
-      <header class="dialog-header row ycenter xbetween pad-x-sm pad-y-xs border-bottom">
-        <h2 class="text-md weight-600 m-0">Custom AI Prompt</h2>
+<dialog
+  bind:this={el}
+  class="dialog dialog-h-screen dialog-md"
+  onclose={() => (visible = false)}
+  onclick={onBackdropClick}
+>
+  <div class="box hfull min0">
+      <header class="row ycenter xbetween pad-x-sm pad-y-xs border-bottom">
+        <h2 class="text-md weight-600">Custom AI Prompt</h2>
         <button onclick={() => (visible = false)} class="button is-icon text-muted" aria-label="Close">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
             <line x1="3" y1="3" x2="11" y2="11"/><line x1="11" y1="3" x2="3" y2="11"/>
@@ -90,14 +111,14 @@
         </button>
       </header>
 
-      <div class="dialog-body box gap-sm pad-x-sm pad-y-sm scroll-y">
+      <div class="pad-sm min0 box gap-sm pad-x-sm pad-y-sm scroll-y">
         {#if hasSelection}
           <div class="field box gap-3xs">
             <div class="field-label text-xs weight-500 text-secondary">Selected text</div>
             <div class="selection-box surface border pad-x-xs pad-y-2xs text-sm text-primary">{selection}</div>
           </div>
         {:else}
-          <p class="text-xs text-muted m-0 pad-y-3xs">No selection — your prompt will be sent as-is.</p>
+          <p class="text-xs text-muted pad-y-3xs">No selection — your prompt will be sent as-is.</p>
         {/if}
 
         <div class="field box gap-3xs">
@@ -107,7 +128,7 @@
           </label>
           <textarea id="custom-prompt-text" bind:this={promptEl} bind:value={promptText}
             placeholder={hasSelection ? "Give me a concise background on this company:" : "Type your prompt…"}
-            class="prompt-input input text-sm wfull" rows="4"></textarea>
+            class="grow min0 input text-sm wfull" rows="4"></textarea>
         </div>
 
         <div class="field row ycenter gap-xs">
@@ -124,15 +145,14 @@
         </div>
 
         {#if error}
-          <div class="field-error-row text-xs text-danger pad-x-2xs pad-y-3xs">{error}</div>
+          <div class="text-xs text-danger pad-x-2xs pad-y-3xs">{error}</div>
         {/if}
       </div>
 
-      <footer class="dialog-footer row ycenter xbetween pad-x-sm pad-y-xs border-top gap-2xs">
+      <footer class="row ycenter xbetween pad-x-sm pad-y-xs border-top gap-2xs">
         <span aria-hidden="true" class="grow"></span>
         <button onclick={() => (visible = false)} class="button ghost text-sm">Cancel</button>
         <button onclick={handleSend} disabled={!canSend} class="button primary text-sm">{sending ? "Opening…" : "Send →"}</button>
       </footer>
-    </div>
   </div>
-{/if}
+</dialog>

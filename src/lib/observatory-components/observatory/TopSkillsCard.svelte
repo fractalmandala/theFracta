@@ -7,12 +7,12 @@
 <section class="box gap-md pad-md" aria-labelledby="trends-title">
 	<header class="box gap-3xs">
 		<p class="eyebrow text-xs">Canonical trends</p>
-		<h2 id="trends-title" class="text-lg weight-600 m-0">Skills and tools</h2>
-		<p class="muted text-sm m-0">Counts and shares are returned by Fractorches for the active filter.</p>
+		<h2 id="trends-title" class="text-lg weight-600">Skills and tools</h2>
+		<p class="text-muted text-sm">Counts and shares are returned by Fractorches for the active filter.</p>
 	</header>
 
 	<section class="box gap-2xs">
-		<h3 class="text-sm weight-600 m-0">Skills</h3>
+		<h3 class="text-sm weight-600">Skills</h3>
 		<div class="card border overflow-hidden">
 			<table class="table-clean">
 				<thead><tr><th>Skill</th><th>Calls</th><th>Sessions</th><th>Share</th><th>Last used</th></tr></thead>
@@ -34,7 +34,7 @@
 	</section>
 
 	<section class="box gap-2xs">
-		<h3 class="text-sm weight-600 m-0">Tools</h3>
+		<h3 class="text-sm weight-600">Tools</h3>
 		<div class="card border overflow-hidden">
 			<table class="table-clean">
 				<thead><tr><th>Tool</th><th>Category</th><th>Calls</th><th>Sessions</th><th>Share</th></tr></thead>

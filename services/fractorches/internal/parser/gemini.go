@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -88,6 +89,25 @@ func (p *geminiProvider) parseSession(
 		)
 	}
 	return nil, nil, fmt.Errorf("invalid Gemini session in %s", path)
+}
+
+// geminiSessionIDFromPath recovers a session id from Gemini's chat filename,
+// which is written as session-<RFC3339-ish timestamp>-<id>.jsonl. Returns ""
+// when the name does not carry one, leaving the caller to report the file as
+// unparseable.
+func geminiSessionIDFromPath(path string) string {
+	name := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+	rest, ok := strings.CutPrefix(name, "session-")
+	if !ok {
+		return ""
+	}
+	// The id is the final dash-separated field; everything before it is the
+	// timestamp, which itself contains dashes.
+	idx := strings.LastIndex(rest, "-")
+	if idx < 0 || idx == len(rest)-1 {
+		return ""
+	}
+	return rest[idx+1:]
 }
 
 func parseGeminiJSONObject(
@@ -204,6 +224,20 @@ func parseGeminiJSONL(
 			recordIDs[msgID] = len(records)
 		}
 		records = append(records, rec)
+	}
+	if sessionID == "" {
+		// Gemini writes two shapes into chats/. One carries "sessionId" on
+		// its records; the other carries only message records interleaved
+		// with "$set" metadata lines, and puts the id in the filename —
+		// session-<timestamp>-<id>.jsonl. Reading it from there recovers a
+		// real session instead of failing the file.
+		//
+		// This mattered more than one file: a parse error here is counted as
+		// a sync failure, and a single failure aborts the whole watch-root
+		// reconciliation (engine.go, "reconciliation failed processing
+		// page"). One such file stalled every sync, permanently, because the
+		// file never goes away.
+		sessionID = geminiSessionIDFromPath(path)
 	}
 	if sessionID == "" {
 		return nil, nil, fmt.Errorf(

@@ -6,8 +6,8 @@
 
 <section class="box gap-md pad-md" aria-labelledby="models-title">
 	<header class="box gap-3xs">
-		<h3 id="models-title" class="text-sm weight-600 m-0">Model breakdown</h3>
-		<p class="muted text-xs m-0">Only model totals reported by the canonical usage endpoint are shown.</p>
+		<h3 id="models-title" class="text-sm weight-600">Model breakdown</h3>
+		<p class="text-muted text-xs">Only model totals reported by the canonical usage endpoint are shown.</p>
 	</header>
 	<div class="card border overflow-hidden">
 		<table class="table-clean">

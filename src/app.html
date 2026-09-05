@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="theme-light-default" data-theme="theme-light-default" data-mode="light" data-bg-style="plain">
   <head>
     <meta charset="utf-8" />
     <link rel="icon" href="%sveltekit.assets%/favicon.png" />
@@ -16,25 +16,18 @@
       With nothing stored, Fracta defaults to light rather than following the OS.
     -->
     <script>
-      (function () {
-        try {
-          var root = document.documentElement;
-          var presets = JSON.parse(localStorage.getItem('fs2.presets') || '{}');
-          for (var axis in presets) {
-            if (presets[axis]) root.setAttribute('data-' + axis, presets[axis]);
-          }
-          var theme = localStorage.getItem('fs2.theme');
-          if (theme) {
-            root.classList.add(theme);
-            root.setAttribute('data-mode', theme.indexOf('-dark') > -1 ? 'dark' : 'light');
-          }
-          var mode = localStorage.getItem('fs2.mode');
-          if (mode === 'dark' || mode === 'light') root.setAttribute('data-mode', mode);
-          else if (!theme) root.setAttribute('data-mode', 'light');
-        } catch (e) {
-          /* storage unavailable — the app's own default applies on mount */
-        }
-      })();
+      // Font overrides, stamped before first paint. Without this the app paints
+      // in the stylesheet's font and then swaps once the state module loads,
+      // which is a visible flash on every launch. Same storage key as
+      // src/lib/states/appFonts.svelte.ts.
+      try {
+        var f = JSON.parse(localStorage.getItem('fracta.appFonts') || '{}');
+        var root = document.documentElement;
+        if (f.sans) root.style.setProperty('--font-sans', '"' + f.sans + '", sans-serif');
+        if (f.mono) root.style.setProperty('--font-mono', '"' + f.mono + '", monospace');
+      } catch (e) {
+        /* storage unavailable — the stylesheet's fonts stand */
+      }
     </script>
   </head>
   <body data-sveltekit-preload-data="hover">

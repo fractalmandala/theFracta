@@ -35,14 +35,14 @@
 </script>
 
 {#if isDragging}
-  <div class="dropzone fixed inset-0 z-modal box ycenter xcenter backdrop-blur pointer-events-none">
+  <div class="border border-dashed radius-4 fixed inset-0 z-modal box ycenter xcenter backdrop-blur pointer-events-none">
     <div class="box ycenter xcenter gap-2xs pad-md pad-x-2xl border-theme">
       <svg width="36" height="36" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
         <rect x="6" y="4" width="20" height="24" rx="2" />
         <polyline points="12,14 16,10 20,14" />
         <line x1="16" y1="10" x2="16" y2="22" />
       </svg>
-      <p class="text-md weight-500 m-0">Drop to open</p>
+      <p class="text-md weight-500">Drop to open</p>
     </div>
   </div>
 {/if}

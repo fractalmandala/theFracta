@@ -19,12 +19,12 @@
 	});
 </script>
 
-<div class="logs-page row grow min0 wfull">
-	<aside class="logs-sidebar border-right box gap-sm pad-sm scroll-y">
+<div class="row grow min0 wfull">
+	<aside class="surface shrink-0 pad-xs border-right box gap-sm pad-sm scroll-y">
 		<LogCalendar />
 		<DayList />
 	</aside>
-	<div class="timeline-pane grow min0">
+	<div class="scroll-y pad-sm grow min0">
 		<LogTimeline />
 	</div>
 	<LogEntryDetail />

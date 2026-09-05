@@ -12,17 +12,17 @@
   }
 </script>
 
-{#if $tocVisible && $tocEntries.length > 0}
-  <div class="box wfull">
-    <div class="toc-header pad-x-sm pad-top-xs text-xs weight-600 tt-u text-muted">
+{#if $tocEntries.length > 0}
+  <div class="toc wfull">
+    <div class="toc-title pad-top-xs">
       On this page
     </div>
-    <nav class="toc-nav box pad-x-2xs pad-bottom-sm gap-3xs">
+    <nav class="toc-list pad-x-2xs pad-bottom-sm">
       {#each $tocEntries as entry (entry.id)}
         <button
           onclick={() => scrollToHeading(entry.id)}
-          class="toc-item text-sm text-secondary truncate text-left cursor-pointer"
-          class:toc-active={$activeHeadingId === entry.id}
+          class="toc-link truncate ta-l cursor-pointer"
+          class:active={$activeHeadingId === entry.id}
           style="--toc-indent: {(entry.level - 1) * 12}px"
         >
           {entry.text}

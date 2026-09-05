@@ -539,6 +539,14 @@ func (s *Server) routes() {
 		"POST /api/v1/recall/import",
 		s.handleImportRecallEntries,
 	))
+	s.mux.Handle("GET /api/v1/wiki/compile/status", s.withTimeout(
+		"GET /api/v1/wiki/compile/status",
+		s.handleWikiCompileStatus,
+	))
+	s.mux.Handle("POST /api/v1/wiki/compile", s.withTimeout(
+		"POST /api/v1/wiki/compile",
+		s.handleWikiCompile,
+	))
 	s.registerEvalIngestRoutes()
 
 	if s.artifactExchangeRunner != nil {

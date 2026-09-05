@@ -139,9 +139,16 @@
   }
 
   onMount(() => {
-    articleEl?.addEventListener("contextmenu", handleContextMenu);
+    const article = articleEl;
+    article?.addEventListener("contextmenu", handleContextMenu);
+    article?.addEventListener("click", handleLinkClick);
+    article?.addEventListener("mouseover", handleLinkOver);
+    article?.addEventListener("mouseout", handleLinkOut);
     return () => {
-      articleEl?.removeEventListener("contextmenu", handleContextMenu);
+      article?.removeEventListener("contextmenu", handleContextMenu);
+      article?.removeEventListener("click", handleLinkClick);
+      article?.removeEventListener("mouseover", handleLinkOver);
+      article?.removeEventListener("mouseout", handleLinkOut);
       observer?.disconnect();
       // Remove the body-level tooltip so it can't outlive the component.
       tooltipEl?.remove();
@@ -173,12 +180,6 @@
       // Add image click handlers for lightbox
       addImageClickHandlers();
 
-      // Add link hover tooltips
-      addLinkTooltips();
-
-      // Open external links in system browser
-      addLinkHandlers();
-
       // Render Mermaid diagrams
       renderMermaidBlocks();
     });
@@ -199,10 +200,15 @@
     });
   }
 
-  function addLinkTooltips() {
-    if (!articleEl) return;
-
-    // Create tooltip element once
+  /**
+   * The tooltip element, created once and reused.
+   *
+   * Hover and click are handled by three listeners on the article rather than
+   * two per link. A long document can carry hundreds of links, and binding each
+   * one meant hundreds of closures re-walked on every render — plus a
+   * `data-*Bound` flag on every anchor to stop it happening twice.
+   */
+  function ensureTooltip() {
     // Sweep any orphaned tooltips left by dev HMR reloads so they can't pile up.
     document.querySelectorAll(".link-tooltip").forEach((el) => {
       if (el !== tooltipEl) el.remove();
@@ -212,53 +218,59 @@
       tooltipEl.className = "link-tooltip";
       document.body.appendChild(tooltipEl);
     }
-
-    const links = articleEl.querySelectorAll("a[href]");
-    links.forEach((link) => {
-      if ((link as HTMLElement).dataset.tooltipBound) return;
-      (link as HTMLElement).dataset.tooltipBound = "true";
-
-      link.addEventListener("mouseenter", (e) => {
-        const href = link.getAttribute("href") ?? "";
-        if (!href || href.startsWith("#")) return;
-        tooltipEl!.textContent = href;
-        tooltipEl!.style.display = "block";
-        const rect = (e.target as HTMLElement).getBoundingClientRect();
-        tooltipEl!.style.left = `${rect.left}px`;
-        tooltipEl!.style.top = `${rect.bottom + 4}px`;
-      });
-
-      link.addEventListener("mouseleave", hideTooltip);
-    });
   }
 
-  function addLinkHandlers() {
-    if (!articleEl) return;
-    const links = articleEl.querySelectorAll("a[href]");
-    links.forEach((link) => {
-      if ((link as HTMLElement).dataset.linkBound) return;
-      const href = link.getAttribute("href") ?? "";
-      // Skip anchor links (in-page navigation handled by the browser default).
-      if (!href || href.startsWith("#")) return;
-      (link as HTMLElement).dataset.linkBound = "true";
-      link.addEventListener("click", async (e) => {
-        e.preventDefault();
-        hideTooltip();
-        // Local file path (no URL scheme, or a file: URL) → let the parent
-        // resolve it against the current document and open it (#30).
-        if (onLocalLink && !isUrlHref(href)) {
-          onLocalLink(href);
-          return;
-        }
-        // Real URL → external opener (browser, mail client, …).
-        try {
-          const { openUrl } = await import("@tauri-apps/plugin-opener");
-          await openUrl(href);
-        } catch {
-          window.open(href, "_blank");
-        }
-      });
-    });
+  /** The link a pointer event happened inside, if any. */
+  function linkFrom(event: Event): HTMLAnchorElement | null {
+    const target = event.target;
+    if (!(target instanceof Element)) return null;
+    const link = target.closest("a[href]");
+    // Only links inside this article — the tooltip is the article's, and a
+    // stray listener must not claim clicks from anything rendered beside it.
+    return link && articleEl?.contains(link) ? (link as HTMLAnchorElement) : null;
+  }
+
+  // `mouseover`/`mouseout` rather than `mouseenter`/`mouseleave`: the latter do
+  // not bubble, so they cannot be delegated to a common ancestor.
+  function handleLinkOver(event: MouseEvent) {
+    const link = linkFrom(event);
+    if (!link) return;
+    const href = link.getAttribute("href") ?? "";
+    if (!href || href.startsWith("#")) return;
+    ensureTooltip();
+    const rect = link.getBoundingClientRect();
+    tooltipEl!.textContent = href;
+    tooltipEl!.style.display = "block";
+    tooltipEl!.style.left = `${rect.left}px`;
+    tooltipEl!.style.top = `${rect.bottom + 4}px`;
+  }
+
+  function handleLinkOut(event: MouseEvent) {
+    if (!linkFrom(event)) return;
+    hideTooltip();
+  }
+
+  async function handleLinkClick(event: MouseEvent) {
+    const link = linkFrom(event);
+    if (!link) return;
+    const href = link.getAttribute("href") ?? "";
+    // Anchor links are in-page navigation; leave them to the browser.
+    if (!href || href.startsWith("#")) return;
+    event.preventDefault();
+    hideTooltip();
+    // Local file path (no URL scheme, or a file: URL) → let the parent
+    // resolve it against the current document and open it (#30).
+    if (onLocalLink && !isUrlHref(href)) {
+      onLocalLink(href);
+      return;
+    }
+    // Real URL → external opener (browser, mail client, …).
+    try {
+      const { openUrl } = await import("@tauri-apps/plugin-opener");
+      await openUrl(href);
+    } catch {
+      window.open(href, "_blank");
+    }
   }
 
   function addCodeCopyButtons() {
@@ -291,7 +303,7 @@
 
 <article
   bind:this={articleEl}
-  class="md-content"
+  class="content-shell"
   style="
     --content-max: {getContentMaxWidth($settings)};
     font-size: {$settings.fontSize}px;

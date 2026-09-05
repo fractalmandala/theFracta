@@ -5,451 +5,208 @@
 // not ship, or (c) a component class the app's markup already references.
 // Nothing here may hardcode a visual value where a contract token exists.
 // =============================================================================
+@font-face
+	font-family: "FK Grotesk Neue"
+	src: url('/fonts/fk-grot.woff2') format ('woff2')
+	font-weight: 400
+	font-style: normal
+	font-display: swap
+
+@font-face
+	font-family: "Overused Grotesk"
+	src: url('/fonts/ov-grot.woff2') format ('woff2')
+	font-weight: 400 700
+	font-style: normal
+	font-display: swap
+
+@font-face
+	font-family: "Familjen Grotesk"
+	src: url('/fonts/fam-grot.woff2') format ('woff2')
+	font-weight: 400 700
+	font-style: normal
+	font-display: swap
+
+@font-face
+	font-family: "Cabinet Grotesk"
+	src: url('/fonts/cab-grot.woff2') format ('woff2')
+	font-weight: 400 700
+	font-style: normal
+	font-display: swap
+
+@font-face
+	font-family: "Lil Grotesk"
+	src: url('/fonts/li-grot.woff2') format ('woff2')
+	font-weight: 400
+	font-style: normal
+	font-display: swap
 
 // --- Token retunes ------------------------------------------------------------
 // Fracta runs a taller header than the contract default and a slightly tighter
 // caption size. --text-14 is a fixed-pixel step the tab bars and toolbars use
 // where the fluid ladder would drift between surfaces.
 :root
-	--header-height: 56px
-	--text-xs: 0.7rem
-	--text-14: 14px
+	--header-height: 78px
 	--rail-width: 64px
+	--titlebar-inset: 88px
+	--text-2xs: 0.65rem
+	--text-xs: 0.75rem
+	--text-sm: 0.9rem
+	--text-bs: clamp(1rem, 1rem + 0vw, 1rem)
+	--text-lg: clamp(1.2rem, 1.1456rem + 0.2418vw, 1.333rem)
+	--text-xl: clamp(1.44rem, 1.3022rem + 0.6125vw, 1.7769rem)
+	--text-2xl: clamp(1.728rem, 1.4659rem + 1.1647vw, 2.3686rem)
+	--text-3xl: clamp(2.0736rem, 1.6303rem + 1.9704vw, 3.1573rem)
+	--text-4xl: clamp(2.4883rem, 1.7845rem + 3.128vw, 4.2087rem)
+	--text-5xl: clamp(2.986rem, 1.9124rem + 4.7714vw, 5.6102rem)
+	--green1: #14591D
+	--green2: #4DA167
+	--font-sans: "Lil Grotesk", sans-serif
+	--font-mono: "Google Sans Code", monospace
+	--app-handle: #101010
 
-.text-14
-	font-size: var(--text-14)
+.green1-theme
+	--green1: #c9f5a4
+	--green2: #a7f16a
+	--green3: #84ea2d
+	--green4: #69cb14
+	--green5: #4e960f
+	--green6: #33610a
+	--green7: #172d05
+	--green8: #000000
+	--green9: #000000
+	--green10: #000000
 
-// --- Shell: the icon rail ------------------------------------------------------
-// The contract's .app-shell is header-over-main. Fracta is rail-beside-main, so
-// the tube is ours. The rail is fixed-width and never grows; .app-main takes
-// the rest.
-.app-shell-tube
+.green2-theme
+	--green1: #1a4b0b
+	--green2: #2c580a
+	--green3: #4b6e0e
+	--green4: #6b8612
+	--green5: #8a9e1b
+	--green6: #a9b626
+	--green7: #c1ce3c
+	--green8: #d5d94d
+
+.rainbow
+	--hue1: #296D00
+	--hue2: #49C300
+	--hue3: #00568E
+	--hue4: #00304F
+	--hue5: #DF8000
+	--hue6: #FFB552
+	--hue7: #D90010
+	--hue8: #FF525F
+
+.theme-light-default
+	--bg: #FFFFFF
+	--bg-surface: #F8F9FA
+	--bg-raised: #FFFCF2
+	--bg-panel: #FFFFFF
+	--bg-footer: #E2E2E2
+	--bg-popover: #F6F7F8
+	--bg-dialog: #FFFFFF
+	--bg-terminal: #0F172A
+	--bg-input: #FFFFFF
+	--bg-canvas: #F8F9FA
+	--border: #d7d7d7
+	--border-subtle: #EDF2F7
+	--border-strong: #a7a7a7
+	--text-primary: #0d0d0d
+	--text-secondary: #61605e
+	--text-muted: #8f8d8d
+	--state-hover: #f7f6f6
+	--state-hover-subtle: #faf9f9
+	--state-selected: #f4f4f3
+	--theme-color: #4e960f
+	--theme-color-alt: #457d13
+	--text-inverse: #FFFFFF
+	--feedback-error: #DC2626
+
+// --- Shell -------------------------------------------------------------------
+// Fracta uses the contract's canonical app-shell markup: header over main.
+// Everything below only adapts it to a Tauri window that draws its own title
+// bar and to a fixed-viewport app where panes scroll rather than the document.
+//
+// The .app-shell-tube / .left-strip / .in-left-strip / .strip-* families that
+// used to live here are gone: they existed to run the shell sideways, which is
+// what forced a 70px dead band to duck the traffic lights.
+
+// Debug helper. Unused by design — outline anything while working on it.
+.bdr
+	border: 1px solid red
+
+html,
+body
+	height: 100%
+	overflow: hidden
+	box-sizing: border-box
+	font-family: var(--font-sans)
+
+.app-shell
+	height: 100vh
+	min-height: 0
+	overflow: hidden
+
+// The header is a fixed band; main takes what is left. No height: 100% here —
+// in a column flex container that is already 100vh, header + main would exceed
+// the container and the header, being shrinkable, would silently lose height.
+.app-header
+	background: var(--bg-panel)
+	display: flex
+	flex-direction: column
+	padding: 0
+	.top-strip
+		height: 30px
+		background: linear-gradient(90.02deg, #18231C 0.01%, #041803 100%)
+	.header-strip
+		height: calc(var(--header-height) - 32px)
+		padding-inline: 1rem
+
+.dynamic-header
+	border-right: 1px solid var(--border)
+	border-left: 1px solid var(--border)
+	height: 100%
+
+.app-main
+	flex: 1 1 0%
+	min-width: 0
+	min-height: 0
+	overflow: hidden
 	display: flex
 	flex-direction: row
-	min-height: 100vh
 
-	.left-strip
-		width: var(--rail-width)
-		flex: 0 0 var(--rail-width)
-		height: 100vh
-		padding-top: var(--space-lg)
-
-		.in-left-strip
-			width: 100%
-			height: 100%
-			padding-top: var(--space-sm)
-			background: var(--bg-panel)
-
-	.app-main
-		flex: 1 1 0%
-		min-width: 0
-		min-height: 100vh
-		display: flex
-		flex-direction: row
-
-// The rail owns the left inset, so the header starts clear of it.
-.app-header
-	padding: 0 var(--space-md) 0 calc(var(--rail-width) + var(--space-md))
-
-// Fracta has no app-level header above the rails, so the side rails run the
-// full viewport rather than starting below one.
-.sidebar-left,
-.sidebar-right
-	top: 0
-	height: 100vh
-	padding: 0
-
-// --- Interactions the contract does not ship ----------------------------------
-button
-	cursor: pointer
-
-button.blank
-	background: none
-	border: none
-	&.pad0
-		padding: 0
-
-.button
-	&.small
-		height: 20px
-		padding: 0 var(--space-xs)
-		font-size: var(--text-xs)
-		border: 1px solid var(--border)
-		&.ghost
-			background: none
-			border: none
-		&.active
-			color: var(--theme-color)
 
 // =============================================================================
-// UTILITIES the contract deliberately omits.
+// Fracta components that are not part of any surface.
 //
-// fractalstyler2 has no margin, overflow, cursor or z-index utilities by
-// design — composition is meant to come from gap and flow. Fracta's markup
-// asks for a small number of them anyway, so they are defined here once
-// rather than reinvented per component.
+// The utility band that used to live here is gone: every class in it either
+// mapped to a fractalstyler2 class, composed away into existing ones, or moved
+// to _09_canonical_candidates.sass as a genuine gap in the contract.
 // =============================================================================
 
-.m-0
-	margin: 0
-.m-top-3xs
-	margin-top: var(--space-3xs)
-.m-top-2xs
-	margin-top: var(--space-2xs)
-.m-y-3xs
-	margin-block: var(--space-3xs)
-.mta
-	margin-top: auto
-.mx-auto
-	margin-inline: auto
-
-.overflow-hidden
-	overflow: hidden
-.cursor-pointer
-	cursor: pointer
-.pointer-events-none
-	pointer-events: none
-.inset-0
-	inset: 0
-.z-modal
-	z-index: var(--z-modal)
-.opacity-half
-	opacity: 0.5
-.align-self-start
-	align-self: flex-start
-.list-disc
-	list-style: disc
-.italic
-	font-style: italic
-.gap-x-md
-	column-gap: var(--space-md)
-.min-h-lg
-	min-height: 12rem
-.min-w-120
-	min-width: 120px
-.max-w-measure
-	max-width: var(--measure)
-.with-gutter
-	padding-inline: var(--page-gutter)
-
-// Type steps below the contract's floor, plus the alignment and tracking
-// utilities the markup uses.
-.text-3xs
-	font-size: 0.625rem
-.text-2xs
-	font-size: 0.6875rem
-.text-base
-	font-size: var(--text-md)
-.text-left
-	text-align: left
-.text-right
-	text-align: right
-.tabular-nums
-	font-variant-numeric: tabular-nums
-.tracking-tight
-	letter-spacing: -0.015em
-.tracking-wider
-	letter-spacing: 0.06em
-.title-tight
-	letter-spacing: -0.02em
-	line-height: 1.15
-.muted
-	color: var(--text-muted)
-.text-inverse-muted
-	color: var(--text-inverse)
-	opacity: 0.72
-
-.border-0
-	border: none
-.border-theme
-	border: 1px solid var(--theme-color)
-.bg-transparent
-	background: transparent
-.bg-dialog
-	background: var(--bg-dialog)
-.bg-popover
-	background: var(--bg-popover)
-.bg-danger-soft
-	background: color-mix(in srgb, var(--danger) 12%, var(--bg))
-.backdrop-blur, .surface-blur
-	background: color-mix(in srgb, var(--bg-surface) 88%, transparent)
-	backdrop-filter: blur(12px)
-	-webkit-backdrop-filter: blur(12px)
-.popover-shadow
-	box-shadow: var(--shadow-lg)
-
-.reset-list
-	list-style: none
-	margin: 0
-	padding: 0
-.reset-list-pad-md
-	list-style: none
-	margin: 0
-	padding: var(--space-md)
-
-.separator
-	display: block
-	height: 1px
-	background: var(--border)
-	margin-block: var(--space-2xs)
-
-.grid-7
-	display: grid
-	grid-template-columns: repeat(7, minmax(0, 1fr))
-	gap: var(--space-3xs)
-
-// A button that is only an icon, and the ghost variant used across toolbars.
-.is-ghost
-	background: none
-	border: none
-	color: var(--text-secondary)
-	&:hover
-		color: var(--text-primary)
-.button-primary
-	background: var(--theme-color)
-	color: var(--text-inverse)
-.icon-44
-	width: 44px
-	height: 44px
-	display: inline-flex
-	align-items: center
-	justify-content: center
-.icon-chevron-slot
-	width: 14px
-	display: inline-flex
-	justify-content: center
-	flex: 0 0 auto
-.app-icon
-	width: 20px
-	height: 20px
-	flex: 0 0 auto
-
-// A spinner and a table reset — both were referenced but never authored.
-.spinner
-	width: 18px
-	height: 18px
-	border: 2px solid var(--border)
-	border-top-color: var(--theme-color)
-	border-radius: var(--radius-full)
-	animation: fs-spin 0.7s linear infinite
-@keyframes fs-spin
-	to
-		transform: rotate(360deg)
-@media (prefers-reduced-motion: reduce)
-	.spinner
-		animation-duration: 2.4s
-
-.table-clean
-	width: 100%
-	border-collapse: collapse
-	font-size: var(--text-sm)
-	th
-		text-align: left
-		font-weight: 600
-		color: var(--text-muted)
-		font-size: var(--text-xs)
-		text-transform: uppercase
-		letter-spacing: 0.06em
-		padding: var(--space-2xs) var(--space-xs)
-		border-bottom: 1px solid var(--border)
-	td
-		padding: var(--space-2xs) var(--space-xs)
-		border-bottom: 1px solid var(--border-subtle)
-		color: var(--text-secondary)
-	tr:last-child td
-		border-bottom: none
-
-.progress-bar
-	height: 2px
-	background: var(--theme-color)
-	transition: width var(--motion-base) var(--ease-out)
-
-.status-dot
-	width: 7px
-	height: 7px
-	border-radius: var(--radius-full)
-	background: var(--success)
-	flex: 0 0 auto
-.dirty-dot
-	width: 6px
-	height: 6px
-	border-radius: var(--radius-full)
-	background: var(--warning)
-	flex: 0 0 auto
-
-.badge-success
-	border-color: var(--success)
-	color: var(--success)
-.badge-warn
-	border-color: var(--warning)
-	color: var(--warning)
-.badge-danger
-	border-color: var(--danger)
-	color: var(--danger)
-.badge-accent
-	border-color: var(--theme-color)
-	color: var(--theme-color)
-
+// Semantic variants of the contract's .badge. The contract ships .badge with no
+// state colours, so these are Fracta's — and a candidate for the contract if the
+// pattern proves general.
 // =============================================================================
 // OBSERVATORY — dashboards take the width; chrome is one toolbar row.
 // =============================================================================
 
-.observatory-canvas
-	flex: 1 1 0%
-	min-width: 0
-	min-height: 0
-	display: flex
+.session-item
 	flex-direction: column
-	gap: var(--space-sm)
-	padding: var(--space-sm)
-	overflow-y: auto
-	overscroll-behavior: contain
-
-.observatory-header
-	flex: 0 0 auto
-	background: var(--bg-raised)
-	border-bottom: 1px solid var(--border)
-
-.observatory-tab
-	background: none
-	border: none
-	border-bottom: 2px solid transparent
-	padding: var(--space-2xs) var(--space-xs)
-	font-size: var(--text-sm)
-	color: var(--text-muted)
-	white-space: nowrap
-	&:hover
-		color: var(--text-primary)
-.observatory-tab-active
-	color: var(--text-primary)
-	border-bottom-color: var(--theme-color)
-
-.observatory-sidebar
-	width: var(--sidebar-width)
-	flex: 0 0 var(--sidebar-width)
-	min-height: 0
-	border-right: 1px solid var(--border)
-	background: var(--bg-surface)
-	overflow-y: auto
-.observatory-project
-	color: var(--text-muted)
-	font-size: var(--text-xs)
+	align-items: flex-start
+	gap: var(--space-3xs)
+	border-bottom: 1px solid var(--border-subtle)
+	border-radius: 0
+	&.active
+		box-shadow: inset 2px 0 0 var(--theme-color)
 
 // The metric strip. These figures are the question the Observatory exists to
 // answer, so they lead — one row, equal columns, hairline-separated.
-.metrics-grid
-	display: grid
-	grid-template-columns: repeat(auto-fit, minmax(140px, 1fr))
-	gap: 1px
-	background: var(--border)
-	border-top: 1px solid var(--border)
-.metric-tile
-	background: var(--bg-raised)
-	padding: var(--space-2xs) var(--space-sm)
-.metric-tile-num
-	font-family: var(--font-mono)
-	font-size: var(--text-lg)
-	font-variant-numeric: tabular-nums
-	color: var(--text-primary)
-	line-height: 1.2
-.metric-tile-lbl
-	font-family: var(--font-mono)
-	font-size: var(--text-xs)
-	text-transform: uppercase
-	letter-spacing: 0.07em
-	color: var(--text-muted)
-.metric-item
-	display: flex
-	justify-content: space-between
-	gap: var(--space-sm)
-	font-size: var(--text-sm)
-
-.status-footer, .status-bar
-	flex: 0 0 auto
-	display: flex
-	align-items: center
-	gap: var(--space-md)
-	padding: var(--space-3xs) var(--space-sm)
-	border-top: 1px solid var(--border)
-	background: var(--bg-footer)
-	font-family: var(--font-mono)
-	font-size: var(--text-xs)
-	color: var(--text-muted)
-
 // Filters live behind toolbar buttons; this panel is the expanded form.
-.filter-panel
-	width: var(--sidebar-width)
-	flex: 0 0 var(--sidebar-width)
-	overflow-y: auto
-	background: var(--bg-surface)
-.filter-label
-	letter-spacing: 0.07em
-
-.sessions-list
-	display: flex
-	flex-direction: column
-	min-height: 0
-	overflow-y: auto
-.session-item
-	display: flex
-	flex-direction: column
-	gap: var(--space-3xs)
-	width: 100%
-	text-align: left
-	padding: var(--space-2xs) var(--space-sm)
-	border: none
-	border-bottom: 1px solid var(--border-subtle)
-	background: none
-	&:hover
-		background: var(--state-hover-subtle)
-.session-selected
-	background: var(--state-selected)
-	box-shadow: inset 2px 0 0 var(--theme-color)
-.session-agent
-	font-size: var(--text-sm)
-	color: var(--text-primary)
-.session-project
-	font-family: var(--font-mono)
-	font-size: var(--text-xs)
-	color: var(--text-muted)
-
-.transcript-viewer
-	display: flex
-	flex-direction: column
-	min-height: 0
-	flex: 1 1 0%
-.transcript-header
-	flex: 0 0 auto
-	padding: var(--space-2xs) var(--space-sm)
-	border-bottom: 1px solid var(--border)
-	background: var(--bg-raised)
-.transcript-messages
-	flex: 1 1 0%
-	min-height: 0
-	overflow-y: auto
-	display: flex
-	flex-direction: column
-	gap: var(--space-xs)
-	padding: var(--space-sm)
-.transcript-message
-	border: 1px solid var(--border-subtle)
-	border-radius: var(--radius-sm)
-	background: var(--bg-raised)
-	padding: var(--space-xs)
-	font-size: var(--text-sm)
 .transcript-compact .transcript-message
 	padding: var(--space-3xs) var(--space-2xs)
 	font-size: var(--text-xs)
 
 // Treemap and calendar: SVG-backed, so these are mostly text and state.
-.treemap-canvas, .graph-canvas
-	flex: 1 1 0%
-	min-height: 12rem
-	position: relative
-.treemap-svg
-	width: 100%
-	height: 100%
-	display: block
 .treemap-group-box
 	stroke: var(--bg)
 	stroke-width: 1
@@ -464,35 +221,12 @@ button.blank
 	font-family: var(--font-mono)
 	font-size: 9px
 	fill: var(--text-inverse)
-.treemap-legend-bar
-	height: 6px
-	border-radius: var(--radius-full)
 .treemap-selected
 	stroke: var(--theme-color)
 	stroke-width: 2
 .treemap-match
 	stroke: var(--warning)
 	stroke-width: 2
-.treemap-group
-	cursor: pointer
-.graph-computing
-	color: var(--text-muted)
-	font-size: var(--text-sm)
-
-.cal-card
-	border: 1px solid var(--border)
-	border-radius: var(--radius-sm)
-	background: var(--bg-raised)
-	padding: var(--space-xs)
-.cal-grid, .cal-weekdays
-	display: grid
-	grid-template-columns: repeat(7, minmax(0, 1fr))
-	gap: 2px
-.cal-weekdays
-	font-family: var(--font-mono)
-	font-size: 10px
-	color: var(--text-muted)
-	text-align: center
 .cal-cell
 	aspect-ratio: 1
 	border: 1px solid var(--border-subtle)
@@ -508,218 +242,19 @@ button.blank
 .cal-cell-empty
 	border-color: transparent
 	background: none
-.cal-cell-activity
-	background: var(--state-hover-subtle)
-.cal-cell-active
-	border-color: var(--theme-color)
-.cal-dots
-	display: flex
-	gap: 2px
-.cal-dot
-	width: 4px
-	height: 4px
-	border-radius: var(--radius-full)
-	background: var(--text-muted)
-.cal-dot-agent
-	background: var(--theme-color)
-.cal-dot-commit
-	background: var(--success)
-.cal-dot-browse
-	background: var(--info)
-
-.day-list
-	display: flex
-	flex-direction: column
-	gap: var(--space-3xs)
-	overflow-y: auto
-	min-height: 0
-.day-card
-	display: flex
-	flex-direction: column
-	gap: var(--space-3xs)
-	width: 100%
-	text-align: left
-	border: 1px solid var(--border-subtle)
-	border-radius: var(--radius-sm)
-	background: var(--bg-raised)
-	padding: var(--space-2xs) var(--space-xs)
-.day-card-active
-	border-color: var(--theme-color)
-	background: var(--state-selected)
-.day-search
-	width: 100%
-.day-stat
-	font-family: var(--font-mono)
-	font-size: var(--text-xs)
-	color: var(--text-muted)
-.day-stat-sessions
-	color: var(--theme-color)
-.day-stat-commits
-	color: var(--success)
-.day-stat-browsing
-	color: var(--info)
-
-.timeline-shell
-	display: flex
-	min-height: 0
-	flex: 1 1 0%
-.timeline-pane
-	flex: 1 1 0%
-	min-width: 0
-	overflow-y: auto
-	padding: var(--space-sm)
-.timeline-item
-	display: flex
-	gap: var(--space-xs)
-	padding: var(--space-2xs) 0
-	border-bottom: 1px solid var(--border-subtle)
-.timeline-icon
-	width: 18px
-	flex: 0 0 auto
-	color: var(--text-muted)
-
-.logs-page
-	display: flex
-	min-height: 0
-	flex: 1 1 0%
-.logs-sidebar
-	width: var(--sidebar-width)
-	flex: 0 0 var(--sidebar-width)
-	border-right: 1px solid var(--border)
-	background: var(--bg-surface)
-	padding: var(--space-xs)
-	overflow-y: auto
-
-.node-inspector
-	width: var(--toc-width)
-	flex: 0 0 var(--toc-width)
-	border-left: 1px solid var(--border)
-	background: var(--bg-surface)
-	padding: var(--space-xs)
-	overflow-y: auto
-.inspector-field
-	display: grid
-	grid-template-columns: max-content minmax(0, 1fr)
-	gap: var(--space-3xs) var(--space-sm)
-	font-family: var(--font-mono)
-	font-size: var(--text-xs)
-.inspector-metric
-	font-family: var(--font-mono)
-	font-variant-numeric: tabular-nums
-	color: var(--text-primary)
-
-.flow-player
-	display: flex
-	align-items: center
-	gap: var(--space-xs)
-	padding: var(--space-2xs) var(--space-xs)
-	border-top: 1px solid var(--border)
-	background: var(--bg-footer)
 .selection-box
 	position: absolute
 	border: 1px dashed var(--theme-color)
 	background: color-mix(in srgb, var(--theme-color) 10%, transparent)
 	pointer-events: none
 
-.recall-search
-	display: flex
-	gap: var(--space-2xs)
-	padding: var(--space-xs)
-	border-bottom: 1px solid var(--border)
-.recall-search-input
-	flex: 1 1 0%
-	min-width: 0
-
 // The graph's box nodes.
-.boxnode-lane
-	display: flex
-	flex-direction: column
-	gap: 2px
-.boxnode-header
-	display: flex
-	align-items: center
-	gap: var(--space-3xs)
-	font-size: var(--text-xs)
-.boxnode-step
-	border: 1px solid var(--border-subtle)
-	border-radius: var(--radius-2)
-	background: var(--bg-raised)
-	padding: 2px var(--space-3xs)
-	font-size: 10px
-	display: flex
-	align-items: center
-	gap: var(--space-3xs)
-.boxnode-leaf
-	border-style: dashed
-.boxnode-selected
-	border-color: var(--theme-color)
-	background: var(--state-selected)
-.boxnode-match
-	border-color: var(--warning)
-.boxnode-dim
-	opacity: 0.45
-.boxnode-rolled, .boxnode-collapsed
-	font-style: italic
-	color: var(--text-muted)
-.boxnode-stepno
-	font-family: var(--font-mono)
-	font-variant-numeric: tabular-nums
-	color: var(--text-muted)
-.boxnode-label
-	overflow: hidden
-	text-overflow: ellipsis
-	white-space: nowrap
-.boxnode-badge
-	font-family: var(--font-mono)
-	font-size: 9px
-	color: var(--text-muted)
-.boxnode-dot
-	width: 5px
-	height: 5px
-	border-radius: var(--radius-full)
-	background: var(--theme-color)
-	flex: 0 0 auto
-.boxnode-ic
-	width: 12px
-	flex: 0 0 auto
-	color: var(--text-muted)
-.boxnode-chev
-	width: 10px
-	flex: 0 0 auto
-	color: var(--text-muted)
 .boxnode-u
 	text-decoration: underline
 
 // =============================================================================
 // WIKI — one title, a reading measure, an inspector that aligns.
 // =============================================================================
-
-.wiki-article
-	flex: 1 1 0%
-	min-width: 0
-	overflow-y: auto
-	padding: var(--space-md) var(--space-lg)
-.wiki-article-content
-	max-width: var(--measure)
-.wiki-article-toolbar
-	display: flex
-	align-items: center
-	gap: var(--space-2xs)
-	padding-bottom: var(--space-xs)
-	border-bottom: 1px solid var(--border-subtle)
-.wiki-article-footer, .wiki-card-footer, .wiki-sidebar-footer
-	border-top: 1px solid var(--border-subtle)
-	padding-top: var(--space-xs)
-	color: var(--text-muted)
-	font-size: var(--text-xs)
-.wiki-title
-	font-size: var(--text-2xl)
-	font-weight: 600
-	letter-spacing: -0.02em
-	line-height: 1.15
-.wiki-summary
-	color: var(--text-secondary)
-	max-width: var(--measure)
 
 // The article's own markdown never re-states the title: the H1 is stripped at
 // render, so the page title is the only one and the ladder runs downward.
@@ -738,20 +273,6 @@ button.blank
 		margin-top: var(--space-md)
 	p, li
 		color: var(--text-secondary)
-.wiki-raw-code
-	font-family: var(--font-mono)
-	font-size: var(--text-xs)
-	background: var(--bg-terminal)
-	padding: var(--space-xs)
-	border-radius: var(--radius-sm)
-	overflow-x: auto
-
-// The .sidebar-right rail owns width, border and scrolling; the inspector is
-// only the content inside it.
-.wiki-inspector
-	width: 100%
-	min-width: 0
-	background: var(--bg-surface)
 
 // Label/value pairs align on a real two-column grid with a gap, so a long
 // identifier truncates in its own track instead of colliding with its label.
@@ -780,192 +301,86 @@ button.blank
 			overflow: hidden
 			text-overflow: ellipsis
 
-.wiki-tag-pill, .wiki-agent-tag, .wiki-file-pill, .wiki-privacy-tag
-	display: inline-flex
-	align-items: center
-	gap: var(--space-3xs)
-	border: 1px solid var(--border)
-	border-radius: var(--radius-full)
-	padding: 1px var(--space-2xs)
-	font-size: var(--text-xs)
-	color: var(--text-secondary)
-	background: var(--bg-raised)
-.wiki-type-badge, .wiki-status-badge, .wiki-agent-badge, .wiki-badge-metric
-	display: inline-flex
-	align-items: center
-	border: 1px solid var(--border)
-	border-radius: var(--radius-2)
-	padding: 0 var(--space-3xs)
-	font-family: var(--font-mono)
-	font-size: var(--text-xs)
-	color: var(--text-muted)
-.wiki-status-badge
-	border-color: var(--success)
-	color: var(--success)
-
-.wiki-telemetry
-	flex: 1 1 0%
-	min-width: 0
-	overflow-y: auto
-	padding: var(--space-md)
-.wiki-telemetry-header
-	display: flex
-	align-items: baseline
-	gap: var(--space-sm)
-	padding-bottom: var(--space-xs)
-	border-bottom: 1px solid var(--border)
-.wiki-telemetry-grid
-	display: grid
-	grid-template-columns: repeat(auto-fit, minmax(var(--card-min), 1fr))
-	gap: var(--space-sm)
-.wiki-telemetry-card, .wiki-telemetry-table-card, .wiki-chat-ref-card
-	border: 1px solid var(--border)
-	border-radius: var(--radius-sm)
-	background: var(--bg-raised)
-	padding: var(--space-sm)
-.wiki-metric-val
-	font-family: var(--font-mono)
-	font-size: var(--text-xl)
-	font-variant-numeric: tabular-nums
 .wiki-matrix-grid
 	display: grid
 	grid-template-columns: repeat(auto-fit, minmax(80px, 1fr))
 	gap: 1px
 	background: var(--border)
-.wiki-matrix-cell
-	background: var(--bg-raised)
-	padding: var(--space-2xs)
-	font-size: var(--text-xs)
-.wiki-table-strip
-	display: flex
-	flex-direction: column
-.wiki-table-row
-	display: flex
-	justify-content: space-between
-	gap: var(--space-sm)
-	padding: var(--space-3xs) 0
-	border-bottom: 1px solid var(--border-subtle)
-	font-size: var(--text-sm)
-.wiki-progress-track
-	height: 4px
-	border-radius: var(--radius-full)
-	background: var(--bg-surface)
-	overflow: hidden
-.wiki-progress-fill
-	height: 100%
-	background: var(--theme-color)
-.wiki-sparkline, .wiki-step-chart
-	display: flex
-	align-items: flex-end
-	gap: 2px
-	height: 32px
-.wiki-privacy-guarantee
-	border-left: 3px solid var(--success)
-	padding-left: var(--space-xs)
-	color: var(--text-secondary)
-	font-size: var(--text-sm)
 
 // =============================================================================
 // NOTES — split mode splits; the TOC is a rail, not an overlay.
 // =============================================================================
 
-.content-main
-	flex: 1 1 0%
-	min-width: 0
-	overflow-y: auto
-	padding: var(--space-md) var(--page-gutter)
-
 // .toc-spaced is retired: the table of contents is a .sidebar-right rail now,
 // so nothing has to be pushed out from under an overlay. The class is kept as
 // a no-op anchor until every call site drops it.
-.toc-spaced
-	max-width: var(--measure)
-
-// The whole point of split mode. Two equal columns, each scrolling on its own,
-// with the preview capped at a reading measure inside its half.
-.edit-split
-	flex: 1 1 0%
-	min-height: 0
-	display: grid
-	grid-template-columns: 1fr 1fr
-	> *
-		min-width: 0
-		min-height: 0
-		overflow: auto
-.split-preview
-	border-left: 1px solid var(--border)
-	padding: var(--space-sm) var(--space-md)
-	background: var(--bg)
-	> *
-		max-width: var(--measure)
-.edit-full
-	flex: 1 1 0%
-	min-height: 0
-	display: flex
-	flex-direction: column
-.edit-form
-	display: flex
-	flex-direction: column
-	gap: var(--space-xs)
-
-.editor-wrap, .editor-stack
-	display: flex
-	flex-direction: column
-	flex: 1 1 0%
-	min-height: 0
-.editor-split
-	display: grid
-	grid-template-columns: 1fr 1fr
-	flex: 1 1 0%
-	min-height: 0
-.editor-gutter
-	font-family: var(--font-mono)
-	color: var(--text-muted)
-	text-align: right
-	user-select: none
-.editor-backdrop
+// The editor is three superimposed layers that have to break lines in exactly
+// the same places: the textarea you type into, a transparent mirror behind it
+// that paints search highlights, and the line-number gutter. Every metric that
+// affects wrapping is declared once, here, so the three cannot drift apart.
+//
+// None of this existed. The textarea carried `.editor` and nothing defined it,
+// so it fell back to its intrinsic `cols` width — the small box a new document
+// opened into. The class linter missed it because "editor" is six lowercase
+// characters and so matched the heuristic for Svelte's scoping hashes.
+.editor-layer
 	position: absolute
 	inset: 0
-	pointer-events: none
-
-.toc-sidebar
-	width: var(--toc-width)
-	flex: 0 0 var(--toc-width)
-	border-left: 1px solid var(--border)
-	background: var(--bg-surface)
-	overflow-y: auto
-	padding: var(--space-sm)
-.toc-header
-	font-family: var(--font-mono)
-	font-size: var(--text-xs)
-	text-transform: uppercase
-	letter-spacing: 0.1em
-	color: var(--text-muted)
-	padding-bottom: var(--space-2xs)
-.toc-nav
-	display: flex
-	flex-direction: column
-	gap: var(--space-3xs)
-.toc-item
-	background: none
+	width: 100%
+	height: 100%
+	margin: 0 auto
+	max-width: var(--editor-max-width, 720px)
+	padding: var(--space-md)
 	border: none
-	text-align: left
-	padding: 1px 0
-	font-size: var(--text-xs)
-	color: var(--text-secondary)
-	&:hover
-		color: var(--text-primary)
-.toc-active, .current-heading
-	color: var(--theme-color)
-	font-weight: 600
+	font-family: var(--font-mono)
+	font-size: var(--editor-font-size, 14px)
+	line-height: var(--editor-line-height, 1.6)
+	white-space: pre-wrap
+	overflow-wrap: break-word
+	tab-size: 2
+	// The gutter occupies the left inset; the other two layers start after it.
+	&.with-gutter
+		padding-left: calc(var(--gutter-w, 0px) + var(--space-md))
 
-.tabbar, .tabbar-top, .tabbar-files
-	display: flex
-	align-items: stretch
-	background: var(--bg-surface)
-	border-bottom: 1px solid var(--border)
-	overflow-x: auto
-	overscroll-behavior-x: contain
+textarea.editor
+	color: var(--text-primary)
+	caret-color: var(--text-primary)
+	resize: none
+	outline: none
+	overflow-y: auto
+
+.editor-backdrop
+	pointer-events: none
+	overflow: hidden
+	color: transparent
+
+// The gutter mirrors the document text — same padding, same measure — so each
+// logical line's block is exactly as tall as it is in the textarea, wrapped
+// lines included. The mirrored text is invisible; only the counter shows, in
+// the strip the shared left padding reserves for it. That is why the numbers
+// stay aligned when a long line soft-wraps, with no height measuring in JS.
+.editor-gutter
+	color: transparent
+	user-select: none
+	overflow: hidden
+	counter-reset: editor-line
+	.gl
+		line-height: inherit
+		counter-increment: editor-line
+		position: relative
+		&::before
+			content: counter(editor-line)
+			position: absolute
+			left: calc(var(--gutter-w, 0px) * -1)
+			width: var(--gutter-w, 0px)
+			padding-right: var(--space-2xs)
+			text-align: right
+			color: var(--text-muted)
+		&.active::before
+			color: var(--text-primary)
+// .toc / .toc-title / .toc-list / .toc-link.active come from the contract.
+// Only the reading-position highlight is Fracta's, and only because the
+// contract has no notion of a "currently visible heading".
 .tab
 	display: inline-flex
 	align-items: center
@@ -973,13 +388,10 @@ button.blank
 	padding: var(--space-3xs) var(--space-xs)
 	border: none
 	border-right: 1px solid var(--border-subtle)
-	background: none
-	font-size: var(--text-xs)
+	background: var(--bg-popover)
 	color: var(--text-muted)
 	white-space: nowrap
-.tab-active
-	background: var(--bg)
-	color: var(--text-primary)
+	height: 100%
 .tab-label
 	overflow: hidden
 	text-overflow: ellipsis
@@ -988,11 +400,6 @@ button.blank
 	opacity: 0.55
 	&:hover
 		opacity: 1
-.tab-dirty
-	color: var(--warning)
-.tab-home
-	flex: 0 0 auto
-
 .raw-source
 	font-family: var(--font-mono)
 	font-size: var(--raw-font-size, var(--text-sm))
@@ -1000,37 +407,17 @@ button.blank
 	max-width: var(--raw-max-width, var(--measure))
 	white-space: pre-wrap
 	word-break: break-word
-.md-content
-	max-width: var(--measure)
-
-.fm-bar
-	display: flex
-	flex-wrap: wrap
-	gap: var(--space-2xs)
-	padding: var(--space-2xs) 0
-	border-bottom: 1px solid var(--border-subtle)
-	font-size: var(--text-xs)
-.fm-key
-	font-family: var(--font-mono)
-	color: var(--text-muted)
-
-.error-card
+// Qualified with .card on purpose: _09 redefines .card and loads after this
+// file, so an unqualified .error-card loses its border and ground to it.
+.card.error-card
 	border-color: var(--danger)
 	border-left: 3px solid var(--danger)
 	background: color-mix(in srgb, var(--danger) 8%, var(--bg))
-.card-empty
-	border: 1px dashed var(--border)
-	background: none
-	color: var(--text-muted)
-.field-error-row
-	color: var(--danger)
-	font-size: var(--text-xs)
-
 // =============================================================================
 // SHARED CHROME — dialogs, overlays, empty states, toasts, settings.
 // =============================================================================
 
-.scrim, .dialog-backdrop, .editor-backdrop, .lightbox
+.scrim, .dialog-backdrop, .lightbox
 	position: fixed
 	inset: 0
 	z-index: var(--z-modal)
@@ -1041,76 +428,11 @@ button.blank
 .scrim-raised
 	z-index: calc(var(--z-modal) + 1)
 
-.dialog-card
-	display: flex
-	flex-direction: column
-	// The backdrop centres the card with .xcenter, which also sets text-align:
-	// center — and that inherits into everything inside. Dialog content reads as
-	// prose and forms, so the card restores normal alignment.
-	text-align: left
-	background: var(--bg-dialog)
-	border: 1px solid var(--border)
-	border-radius: var(--radius-md)
-	box-shadow: var(--shadow-lg)
-	max-height: 90vh
-	width: min(92vw, 40rem)
-.dialog-sm
-	width: min(92vw, 24rem)
-.dialog-md
-	width: min(92vw, 34rem)
-.dialog-lg
-	width: min(92vw, 48rem)
-.dialog-xl
-	width: min(94vw, 64rem)
-.dialog-h-fit
-	max-height: fit-content
-.dialog-h-screen
-	height: 90vh
-.dialog-header
-	display: flex
-	align-items: center
-	justify-content: space-between
-	gap: var(--space-sm)
-	padding: var(--space-sm)
-	border-bottom: 1px solid var(--border)
-	flex: 0 0 auto
-.dialog-body, .dialog-content
-	padding: var(--space-sm)
-	overflow-y: auto
-	min-height: 0
-.dialog-content-flex
-	display: flex
-	flex: 1 1 0%
-	min-height: 0
-.dialog-footer
-	display: flex
-	align-items: center
-	justify-content: flex-end
-	gap: var(--space-2xs)
-	padding: var(--space-sm)
-	border-top: 1px solid var(--border)
-	flex: 0 0 auto
-.dialog-tab
-	background: none
-	border: none
-	border-bottom: 2px solid transparent
-	padding: var(--space-2xs) var(--space-xs)
-	color: var(--text-muted)
-	font-size: var(--text-sm)
-.dialog-tab-active
-	color: var(--text-primary)
-	border-bottom-color: var(--theme-color)
-.dialog-theme-customizer
-	width: min(94vw, 52rem)
-
 .modal-textarea
 	width: 100%
 	font-family: var(--font-mono)
 	font-size: var(--text-sm)
 	resize: vertical
-.modal-textarea-h
-	min-height: 12rem
-
 .toast-stack
 	position: fixed
 	right: var(--space-md)
@@ -1119,94 +441,9 @@ button.blank
 	display: flex
 	flex-direction: column
 	gap: var(--space-2xs)
-.toast
-	border: 1px solid var(--border)
-	border-radius: var(--radius-sm)
-	background: var(--bg-raised)
-	box-shadow: var(--shadow-md)
-	padding: var(--space-2xs) var(--space-sm)
-	font-size: var(--text-sm)
-
-.dropdown
-	position: absolute
-	z-index: var(--z-modal)
-	min-width: 10rem
-	background: var(--bg-popover)
-	border: 1px solid var(--border)
-	border-radius: var(--radius-sm)
-	box-shadow: var(--shadow-lg)
-	padding: var(--space-3xs)
-.dropdown-item
-	display: flex
-	align-items: center
-	gap: var(--space-2xs)
-	width: 100%
-	text-align: left
-	background: none
-	border: none
-	padding: var(--space-3xs) var(--space-2xs)
-	border-radius: var(--radius-2)
-	font-size: var(--text-sm)
-	color: var(--text-secondary)
-	&:hover
-		background: var(--state-hover)
-		color: var(--text-primary)
-
-.empty-root
-	display: flex
-	flex-direction: column
-	align-items: center
-	justify-content: center
-	gap: var(--space-sm)
-	padding: var(--space-2xl)
-	text-align: center
-	flex: 1 1 0%
-.empty-hero
-	display: flex
-	flex-direction: column
-	align-items: center
-	gap: var(--space-2xs)
-.empty-hero-icon
-	color: var(--text-muted)
-.empty-list
-	display: flex
-	flex-wrap: wrap
-	gap: var(--space-2xs)
-	justify-content: center
-.empty-item
-	display: inline-flex
-	align-items: center
-	gap: var(--space-3xs)
-	font-size: var(--text-sm)
-	color: var(--text-secondary)
-.empty-item-icon
-	color: var(--text-muted)
-.empty-card-scroll
-	overflow-y: auto
-	min-height: 0
-.empty-footer
-	color: var(--text-muted)
-	font-size: var(--text-xs)
-.empty-footer-link
-	color: var(--theme-color)
-.empty-zoom-label
-	font-family: var(--font-mono)
-	font-size: var(--text-xs)
-	color: var(--text-muted)
-
-.dropzone
-	border: 1px dashed var(--border)
-	border-radius: var(--radius-sm)
 .drag-over
 	border-color: var(--theme-color)
 	background: color-mix(in srgb, var(--theme-color) 8%, transparent)
-.dashed-action
-	border: 1px dashed var(--border)
-	border-radius: var(--radius-sm)
-	background: none
-	color: var(--text-secondary)
-	padding: var(--space-2xs) var(--space-sm)
-
 .search-bar
 	display: flex
 	align-items: center
@@ -1220,231 +457,12 @@ button.blank
 	border-radius: var(--radius-sm)
 	box-shadow: var(--shadow-md)
 	padding: var(--space-3xs) var(--space-2xs)
-.search-input
-	min-width: 12rem
-.search-count
-	font-family: var(--font-mono)
-	font-size: var(--text-xs)
-	color: var(--text-muted)
-	font-variant-numeric: tabular-nums
-.search-nav
-	display: flex
-	gap: 2px
-.search-nav-btn, .search-close
-	background: none
-	border: none
-	color: var(--text-muted)
-	&:hover
-		color: var(--text-primary)
-
-.settings-section
-	display: flex
-	flex-direction: column
-	gap: var(--space-2xs)
-	padding-block: var(--space-sm)
-	border-bottom: 1px solid var(--border-subtle)
-.settings-row
-	display: flex
-	align-items: center
-	justify-content: space-between
-	gap: var(--space-md)
-.settings-row-text
-	display: flex
-	flex-direction: column
-	gap: 2px
-	min-width: 0
-.settings-switch
-	flex: 0 0 auto
-
-.provider-row, .prompt-row, .default-row
-	display: flex
-	align-items: center
-	gap: var(--space-2xs)
-	padding: var(--space-3xs) 0
-	border-bottom: 1px solid var(--border-subtle)
-.provider
-	display: flex
-	align-items: center
-	gap: var(--space-2xs)
-	min-width: 0
-.provider-actions, .prompt-actions
-	margin-left: auto
-	display: flex
-	gap: var(--space-3xs)
-.provider-favicon, .provider-favicon-img
-	width: 16px
-	height: 16px
-	flex: 0 0 auto
-	border-radius: var(--radius-2)
-.prompt-input
-	flex: 1 1 0%
-	min-width: 0
-.prompts
-	display: flex
-	flex-direction: column
-.url-hints
-	color: var(--text-muted)
-	font-size: var(--text-xs)
-.trigger-code
-	font-family: var(--font-mono)
-	font-size: var(--text-xs)
-	background: var(--bg-surface)
-	border-radius: var(--radius-2)
-	padding: 0 var(--space-3xs)
-.copy-feedback
-	color: var(--success)
-	font-size: var(--text-xs)
-.ail-root
-	display: flex
-	flex-direction: column
-	gap: var(--space-sm)
-
-.file-item
-	display: flex
-	align-items: center
-	gap: var(--space-2xs)
-	width: 100%
-	text-align: left
-	background: none
-	border: none
-	padding: var(--space-3xs) var(--space-2xs)
-	font-size: var(--text-sm)
-	color: var(--text-secondary)
-	&:hover
-		background: var(--state-hover-subtle)
-		color: var(--text-primary)
-.file-item-nested
-	padding-left: var(--space-md)
-.file-icon
-	color: var(--text-muted)
-	flex: 0 0 auto
-.folder-header
-	display: flex
-	align-items: center
-	gap: var(--space-3xs)
-	width: 100%
-	background: none
-	border: none
-	padding: var(--space-3xs) var(--space-2xs)
-	font-size: var(--text-xs)
-	text-transform: uppercase
-	letter-spacing: 0.07em
-	color: var(--text-muted)
 .folder-chevron
 	transition: transform var(--motion-fast) var(--ease-out)
 	flex: 0 0 auto
 .folder-chevron-open
 	transform: rotate(90deg)
-.folder-name
-	overflow: hidden
-	text-overflow: ellipsis
-	white-space: nowrap
-.folder-path
-	font-family: var(--font-mono)
-	font-size: 10px
-	color: var(--text-muted)
-	overflow: hidden
-	text-overflow: ellipsis
-.folder-file-count
-	margin-left: auto
-	font-family: var(--font-mono)
-	font-size: 10px
-	color: var(--text-muted)
-.folder-loading-inline
-	color: var(--text-muted)
-	font-size: var(--text-xs)
 .add-folder-btn, .browse-btn, .new-tab-btn, .save-btn,
-.library-row-btn, .library-icon-btn, .library-file-btn, .library-row-remove
-	background: none
-	border: none
-	color: var(--text-secondary)
-	display: inline-flex
-	align-items: center
-	gap: var(--space-3xs)
-	&:hover
-		color: var(--text-primary)
-.library-row-btn, .library-file-btn
-	width: 100%
-	text-align: left
-	padding: var(--space-3xs) var(--space-2xs)
-.save-dirty
-	color: var(--warning)
-
-.toolbar
-	display: flex
-	align-items: center
-	gap: var(--space-2xs)
-	padding: var(--space-3xs) var(--space-xs)
-	border-bottom: 1px solid var(--border)
-	background: var(--bg-surface)
-.tool-active
-	color: var(--theme-color)
-.mode-tabs, .mode-segmented, .rc-segmented
-	display: inline-flex
-	border: 1px solid var(--border)
-	border-radius: var(--radius-2)
-	overflow: hidden
-.mode-tab, .mode-seg, .rc-seg-btn
-	background: none
-	border: none
-	border-right: 1px solid var(--border)
-	padding: 2px var(--space-2xs)
-	font-size: var(--text-xs)
-	color: var(--text-muted)
-	&:last-child
-		border-right: none
-.mode-tab-active, .mode-active, .rc-seg-active
-	background: var(--state-selected)
-	color: var(--text-primary)
-.rc-panel
-	display: flex
-	flex-direction: column
-	gap: var(--space-2xs)
-.rc-range
-	width: 100%
-.appheader
-	display: flex
-	align-items: center
-	gap: var(--space-2xs)
-.appheader-active
-	color: var(--theme-color)
-.sidebar-tab
-	background: none
-	border: none
-	padding: var(--space-3xs) var(--space-2xs)
-	font-size: var(--text-xs)
-	color: var(--text-muted)
-.sidebar-tab-active
-	color: var(--text-primary)
-	font-weight: 600
-.preset-btn
-	display: inline-flex
-	align-items: center
-	gap: var(--space-3xs)
-	border: 1px solid var(--border)
-	border-radius: var(--radius-2)
-	background: var(--bg-raised)
-	padding: 2px var(--space-2xs)
-	font-size: var(--text-xs)
-.preset-btn-active
-	border-color: var(--theme-color)
-	color: var(--theme-color)
-.preset-swatch, .accent-swatch
-	width: 14px
-	height: 14px
-	border-radius: var(--radius-2)
-	border: 1px solid var(--border)
-	flex: 0 0 auto
-.accent-swatch-active
-	outline: 2px solid var(--theme-color)
-	outline-offset: 1px
-.custom-color-picker
-	width: 100%
-	height: 28px
-	border: 1px solid var(--border)
-	border-radius: var(--radius-2)
-	background: none
-
 .scroll-top
 	position: absolute
 	right: var(--space-md)
@@ -1455,21 +473,6 @@ button.blank
 	max-width: 92vw
 	max-height: 88vh
 	object-fit: contain
-.lb-nav, .lb-close, .lb-next
-	position: absolute
-	background: none
-	border: none
-	color: var(--text-inverse)
-	opacity: 0.75
-	&:hover
-		opacity: 1
-.lb-close
-	top: var(--space-md)
-	right: var(--space-md)
-.lb-nav
-	left: var(--space-md)
-.lb-next
-	right: var(--space-md)
 .lb-counter
 	position: absolute
 	bottom: var(--space-md)
@@ -1484,26 +487,9 @@ button.blank
 	background: var(--bg)
 	display: flex
 	flex-direction: column
-.present-stage
-	flex: 1 1 0%
-	min-height: 0
-	display: flex
-	align-items: center
-	justify-content: center
-	padding: var(--space-xl)
 .present-slide
 	max-width: 60rem
 	width: 100%
-.present-nav, .present-close
-	position: absolute
-	background: none
-	border: none
-	color: var(--text-muted)
-	&:hover
-		color: var(--text-primary)
-.present-close
-	top: var(--space-md)
-	right: var(--space-md)
 .present-counter
 	position: absolute
 	bottom: var(--space-md)
@@ -1513,16 +499,8 @@ button.blank
 	font-size: var(--text-xs)
 	color: var(--text-muted)
 
-.panels-grid
-	display: grid
-	grid-template-columns: repeat(auto-fit, minmax(var(--card-min), 1fr))
-	gap: var(--space-sm)
-
 // Fracta's rails carry scrolling content, and the wiki/notes surfaces sit
 // directly inside .app-main with no page header above them.
-.sidebar-left, .sidebar-right
-	overflow-y: auto
-	overscroll-behavior: contain
 .main-section
 	display: flex
 	flex-direction: column
@@ -1538,41 +516,71 @@ button.blank
 // =============================================================================
 
 :root
-	--rail-collapsed-w: 22px
 	--rail-grip-w: 5px
 
+// The rail's base rule. It is applied as `class="rail rail-{side}"`, a dynamic
+// attribute, which is why a sweep of "classes markup no longer references"
+// wrongly counted it as dead.
 .rail
 	position: relative
-	flex: 0 0 var(--rail-w)
-	width: var(--rail-w)
+	// --rail-rendered is the spring's current value, written per frame by
+	// Rail.svelte. No transition here on purpose: the spring is the animation,
+	// and a CSS transition on top would fight it, smearing every frame toward a
+	// value the spring has already moved past.
+	//
+	// Tune the motion in Rail.svelte's OPENING and CLOSING constants —
+	// stiffness and damping, separately for each direction.
+	flex: 0 0 var(--rail-rendered, var(--rail-w))
+	width: var(--rail-rendered, var(--rail-w))
 	min-width: 0
-	display: flex
 	min-height: 0
-	background: var(--bg-surface)
-	// No transition on the width. Both flex-basis and width read --rail-w, and a
-	// transition on a var()-driven property keeps resolving the value it had when
-	// the transition was installed — the rail would stay at its initial width no
-	// matter what the drag set. Dragging has to track the pointer exactly in any
-	// case, so nothing is lost.
+	height: 100%
+	align-self: stretch
+	display: flex
+	background: var(--bg-panel)
 
 .rail-dragging
 	user-select: none
 
-.rail-collapsed
-	flex-basis: var(--rail-collapsed-w)
-	width: var(--rail-collapsed-w)
-
-.rail-left
-	border-right: 1px solid var(--border)
-.rail-right
-	border-left: 1px solid var(--border)
-
-.rail-body
-	flex: 1 1 0%
+// Clips the sliding body. It cannot go on .rail itself: the grip is positioned
+// half outside the rail's box, and clipping there would cut the drag handle in
+// two.
+.rail-clip
+	flex: 1 1 auto
 	min-width: 0
+	min-height: 0
+	display: flex
+	overflow: hidden
+
+// Collapsed is hidden outright. The 22px strip existed only to keep the rail's
+// own toggle reachable; the header owns that control now, so the rail can go.
+//
+// Qualified with .rail because .rail-left / .rail-right are declared further
+// down and their border would otherwise win on source order, leaving a 1px
+// hairline where the hidden rail used to be.
+// The spring supplies the width, so this must not restate it — only the things
+// that are not animated.
+.rail.rail-collapsed
+	border: none
+	overflow: hidden
+
+// Held at the rail's full width even as the rail collapses, so the content is
+// swiped out of view rather than reflowed down to nothing on the way.
+.rail-body
+	flex: 0 0 var(--rail-w)
+	width: var(--rail-w)
 	min-height: 0
 	overflow: auto
 	overscroll-behavior: contain
+
+// Each rail leaves toward the edge it lives on, so the gesture reads as the
+// panel moving off screen rather than being erased in place. Derived from the
+// same spring value as the width — not timed separately — so the content and
+// its own panel edge cannot drift apart.
+.rail-left .rail-body
+	translate: calc((var(--rail-progress, 1) - 1) * 100%) 0
+.rail-right .rail-body
+	translate: calc((1 - var(--rail-progress, 1)) * 100%) 0
 
 // The drag handle sits on the rail's outer edge, a few pixels wide, and widens
 // its hit area with a padded pseudo-element so it is grabbable without being
@@ -1608,82 +616,536 @@ button.blank
 .rail-dragging .rail-grip::after
 	background: var(--theme-color)
 
-// The collapse control rides the same edge as the grip, near the top, and stays
-// reachable when the rail is collapsed to its strip.
-.rail-toggle
-	position: absolute
-	top: var(--space-2xs)
-	z-index: calc(var(--z-raised) + 1)
-	width: 18px
-	height: 18px
-	display: inline-flex
-	align-items: center
-	justify-content: center
-	padding: 0
-	border: 1px solid var(--border)
-	border-radius: var(--radius-2)
-	background: var(--bg-raised)
-	color: var(--text-muted)
-	&:hover
-		color: var(--text-primary)
-		border-color: var(--theme-color)
-	&:focus-visible
-		outline: 2px solid var(--theme-color)
-		outline-offset: 1px
 
-// The toggle straddles the rail's divider rather than sitting inside the rail,
-// so it never lands on top of the panel's own heading.
-.rail-left .rail-toggle
-	right: -9px
-.rail-right .rail-toggle
-	left: -9px
-
-// A collapsed rail is a strip holding only its toggle, centred in it.
-.rail-collapsed .rail-toggle
-	top: var(--space-2xs)
-	left: 50%
-	right: auto
-	transform: translateX(-50%)
-
-// Rails supply their own width now, so the fixed-width shell rails must not
-// fight them when a Rail is used in their place.
-.rail .sidebar-left,
-.rail .sidebar-right,
-.rail .observatory-sidebar,
-.rail .filter-panel,
-.rail .toc-sidebar,
-.rail .wiki-inspector
-	width: 100%
-	flex: 1 1 auto
-	border: none
-
-// The icon strip is a full-height column in three zones: the surfaces, then the
-// active surface's own actions, then application-level controls.
-//
-// Only the middle zone scrolls. If the strip scrolled as a whole, a surface with
-// a long action list (Notes) would push the global controls past the bottom edge
-// — which is exactly what the theme toggle needs never to do.
-.app-shell-tube .left-strip .in-left-strip
-	display: flex
-	flex-direction: column
-	padding-bottom: var(--space-sm)
-	// Visible, not hidden: the globals zone hosts a popover palette picker that
-	// is far wider than the 64px strip and has to escape it. Scrolling is the
-	// middle zone's job, so the container never needs to clip.
-	overflow: visible
-
-.strip-surfaces,
-.strip-globals
-	flex: 0 0 auto
-
-.strip-actions
-	flex: 1 1 auto
-	min-height: 0
 
 // The settings dialog is two-pane: a section list that governs scope, and the
 // section itself. The list is fixed-width so switching sections never shifts it.
-.settings-nav
-	width: 168px
-	flex: 0 0 168px
-	background: var(--bg-surface)
-	overflow-y: auto
+// Each surface's main column is a flex column that clips: its own children own
+// the scrolling, so a long document never pushes the shell around.
+.page-main
+	display: flex
+	flex-direction: column
+	min-height: 0
+	height: 100%
+	overflow: hidden
+
+// --- Popovers pinned to the viewport -----------------------------------------
+// The contract's .popover is absolute and offsets itself below a positioned
+// parent (top: calc(100% + 6px); left: 0). These menus are `fixed`, where those
+// offsets resolve against the viewport instead — which would drop them off the
+// bottom-left of the window. Clearing the offsets keeps a fixed element at its
+// static position, next to its trigger, which is what it wants.
+.popover.fixed
+	top: auto
+	left: auto
+
+// The tab context menu computes where it was opened. --dropdown-x/y have been
+// set inline all along with nothing reading them, so the menu never actually
+// moved to the pointer.
+.popover.at-pointer
+	top: var(--dropdown-y, auto)
+	left: var(--dropdown-x, auto)
+
+// Constructed class names: `class="rail rail-{side}"` and
+// `boxnode-kind-${data.kind}`. The literal names never appear in source, so any
+// "is this class referenced?" sweep must protect the whole prefix, not look for
+// an exact match. This family has now been deleted twice by that mistake.
+.rail-left
+	border-right: 1px solid var(--border)
+.rail-right
+	border-left: 1px solid var(--border)
+
+.boxnode-kind-agent
+	box-shadow: inset 2px 0 0 var(--theme-color)
+.boxnode-kind-tool
+	box-shadow: inset 2px 0 0 var(--info)
+.boxnode-kind-file
+	box-shadow: inset 2px 0 0 var(--success)
+.boxnode-kind-error
+	box-shadow: inset 2px 0 0 var(--danger)
+
+// --- Graph and treemap primitives ---------------------------------------------
+// These are applied through dynamic class attributes — `class="boxnode {kind}"`
+// and `class="treemap-file {tier}"` — so nothing checked them until the linter
+// learned to read the static half of such attributes. Both were undefined.
+
+.boxnode
+	display: flex
+	flex-direction: column
+	gap: 2px
+	border: 1px solid var(--border-subtle)
+	border-radius: var(--radius-2)
+	background: var(--bg-raised)
+	padding: var(--space-3xs)
+
+// Node kind is a semantic hue on the left edge, not a fill: the node stays
+// readable and the kind is still legible at a glance.
+// Risk tiers, low through peak. Colour carries the ordering, so the ramp runs
+// one hue and gains weight rather than changing hue per tier.
+.treemap-tier-low
+	fill: color-mix(in srgb, var(--success) 55%, var(--bg))
+.treemap-tier-mid
+	fill: color-mix(in srgb, var(--warning) 55%, var(--bg))
+.treemap-tier-high
+	fill: color-mix(in srgb, var(--warning) 85%, var(--bg))
+.treemap-tier-peak
+	fill: var(--danger)
+
+// =============================================================================
+// PRINT — what leaves the app as a PDF.
+//
+// The app shell is a fixed 100vh viewport whose panes scroll internally, which
+// is exactly wrong for paper: printing it yields one page of whatever happened
+// to be visible. So printing does not print the app at all. exportPdf() mounts
+// the document's rendered HTML in a .print-root and this reveals only that,
+// letting the page box grow to as many sheets as the document needs.
+// =============================================================================
+
+.print-root
+	display: none
+
+@media print
+	// The fixed viewport is a screen concern; on paper the document sets the
+	// height and the pagination follows from it.
+	html,
+	body
+		height: auto
+		overflow: visible
+	body > *:not(.print-root)
+		display: none !important
+	.print-root
+		display: block
+	// Paper is white whatever the palette is, and link URLs are lost in ink.
+	.content-shell
+		max-width: none
+		color: #000
+		background: #fff
+	a
+		color: inherit
+		text-decoration: underline
+	// Do not strand a heading at the foot of a page, or split a code block or
+	// a table row across two.
+	h1, h2, h3, h4
+		break-after: avoid
+	pre, blockquote, table, figure, img
+		break-inside: avoid
+
+// =============================================================================
+// RICH TEXT — Milkdown/Crepe, dressed in the contract's tokens.
+//
+// Crepe's shipped themes (frame, nord, classic) are nothing but a block of
+// custom properties on .milkdown. Importing one would run a second palette
+// beside fractalstyler2's and freeze the editor in light mode. So the component
+// imports only Crepe's structural CSS and the variables are declared here
+// against contract tokens — the editor then follows the palette, the mode and
+// the type scale like every other surface, with no theme switching to wire up.
+// =============================================================================
+
+.rich-editor
+	.milkdown
+		--crepe-color-background: var(--bg)
+		--crepe-color-on-background: var(--text-primary)
+		--crepe-color-surface: var(--bg-surface)
+		--crepe-color-surface-low: var(--bg-raised)
+		--crepe-color-on-surface: var(--text-primary)
+		--crepe-color-on-surface-variant: var(--text-secondary)
+		--crepe-color-outline: var(--border)
+		--crepe-color-primary: var(--theme-color)
+		--crepe-color-secondary: var(--bg-surface)
+		--crepe-color-on-secondary: var(--text-primary)
+		--crepe-color-inverse: var(--text-primary)
+		--crepe-color-on-inverse: var(--text-inverse)
+		--crepe-color-inline-code: var(--danger)
+		--crepe-color-error: var(--danger)
+		--crepe-color-hover: var(--state-hover)
+		--crepe-color-selected: var(--state-selected)
+		--crepe-color-inline-area: var(--border-subtle)
+		--crepe-font-title: var(--font-sans)
+		--crepe-font-default: var(--font-sans)
+		--crepe-font-code: var(--font-mono)
+		// Crepe centres its own measure; match the reading measure so switching
+		// between Read and Rich Text does not reflow the text.
+		.ProseMirror
+			// --rich-measure is written by RichTextEditor.svelte from the same
+			// reader setting DocumentTitle and Editor use, so all three share a
+			// left edge. The token is the fallback for a mount without one.
+			max-width: var(--rich-measure, var(--measure))
+			margin: 0 auto
+			padding: var(--space-md)
+
+// The open document's name, above the editor. Aligned to the same measure and
+// left edge as the content beneath it, so the title and the first line of text
+// share a margin instead of the heading floating on its own axis.
+// --doc-title-max is written by DocumentTitle.svelte: the measure is a runtime
+// reader setting, not a token, so it cannot be declared here.
+.doc-title
+	width: 100%
+	max-width: var(--doc-title-max, var(--measure))
+	margin: 0 auto
+	padding: var(--space-md) var(--space-md) var(--space-2xs)
+
+// --- Palette picker -----------------------------------------------------------
+// The palettes, inline in Settings. Each option wears the palette's own class,
+// so every colour below is read from that palette's real tokens rather than a
+// duplicated table that could drift from the contract.
+.palette-grid
+	display: grid
+	grid-template-columns: repeat(auto-fill, minmax(140px, 1fr))
+	gap: var(--space-2xs)
+
+.palette-option
+	display: flex
+	flex-direction: column
+	gap: var(--space-3xs)
+	padding: var(--space-3xs)
+	border: 1px solid var(--border)
+	border-radius: var(--radius-md)
+	// var(--bg) here resolves to the option's own palette, which is the point:
+	// the swatch previews the palette it applies.
+	background: var(--bg)
+	color: var(--text-primary)
+	cursor: pointer
+	text-align: left
+	&:hover
+		border-color: var(--theme-color)
+	&.active
+		border-color: var(--theme-color)
+		box-shadow: 0 0 0 2px var(--theme-color)
+
+.palette-swatch
+	display: grid
+	grid-template-columns: repeat(4, 1fr)
+	height: 22px
+	border-radius: var(--radius-sm)
+	overflow: hidden
+	> i
+		display: block
+	> i:nth-child(1)
+		background: var(--bg)
+	> i:nth-child(2)
+		background: var(--bg-surface)
+	> i:nth-child(3)
+		background: var(--text-primary)
+	> i:nth-child(4)
+		background: var(--theme-color)
+
+// =============================================================================
+// BENCH — the Sessions dashboard's charts.
+//
+// All of these are laid out by grid flow rather than by per-element coordinates:
+// a calendar year is ~366 cells, and a --col/--row on each would be that many
+// inline custom properties, which the styling contract does not allow in markup.
+// =============================================================================
+
+// A week is a column of seven; grid-auto-flow fills them in DOM order, so the
+// markup just emits weeks back to back.
+.heatmap-grid
+	display: grid
+	grid-template-rows: repeat(7, 10px)
+	grid-auto-flow: column
+	grid-auto-columns: 10px
+	gap: 2px
+
+.heatmap-cell
+	display: block
+	width: 10px
+	height: 10px
+	border-radius: 2px
+	background: var(--state-hover)
+
+// Five bands, from the service's own level. Mixing against the theme colour
+// keeps the ramp inside whatever palette is applied.
+.heatmap-l0
+	background: var(--state-hover)
+.heatmap-l1
+	background: color-mix(in srgb, var(--theme-color) 25%, var(--bg))
+.heatmap-l2
+	background: color-mix(in srgb, var(--theme-color) 50%, var(--bg))
+.heatmap-l3
+	background: color-mix(in srgb, var(--theme-color) 75%, var(--bg))
+.heatmap-l4
+	background: var(--theme-color)
+.heatmap-pad
+	background: none
+
+// One label slot per week column, so month names line up with their columns
+// without any element needing to know its index.
+.heatmap-months
+	display: grid
+	grid-auto-flow: column
+	grid-auto-columns: 10px
+	gap: 2px
+
+.hourgrid
+	display: grid
+	grid-template-columns: repeat(24, 1fr)
+	gap: 2px
+	flex: 1 1 auto
+	min-width: 480px
+
+.hourgrid-day
+	width: 28px
+
+// --- Ranked bars --------------------------------------------------------------
+// --bar-width is written per row by BarList.svelte: the value is data, not
+// authored styling, so it cannot be declared here.
+.barlist-row
+	display: grid
+	grid-template-columns: minmax(80px, 160px) 1fr auto auto
+	align-items: center
+	gap: var(--space-2xs)
+	font-size: var(--text-xs)
+
+.barlist-label
+	color: var(--text-primary)
+	background: none
+	border: none
+	padding: 0
+	font: inherit
+	text-align: left
+
+button.barlist-label
+	cursor: pointer
+	&:hover
+		color: var(--theme-color)
+
+.barlist-track
+	height: 12px
+	border-radius: var(--radius-sm)
+	background: var(--state-hover)
+	overflow: hidden
+
+.barlist-fill
+	display: block
+	height: 100%
+	width: var(--bar-width, 0%)
+	background: var(--theme-color)
+	border-radius: inherit
+
+// --- Session health trend -----------------------------------------------------
+// --health is written per bar by SessionHealthPanel.svelte; the value is a
+// score, not authored styling.
+.healthtrend
+	display: flex
+	align-items: flex-end
+	gap: 2px
+	height: 72px
+	min-width: 320px
+
+.healthbar
+	display: block
+	flex: 1 0 3px
+	min-width: 3px
+	height: var(--health, 2%)
+	border-radius: 1px
+	background: var(--text-muted)
+
+// Grade bands. Green through red, so a run of bad days reads at a glance
+// without having to check the axis.
+.healthbar-A
+	background: var(--success)
+.healthbar-B
+	background: color-mix(in srgb, var(--success) 60%, var(--warning))
+.healthbar-C
+	background: var(--warning)
+.healthbar-D
+	background: color-mix(in srgb, var(--warning) 50%, var(--danger))
+.healthbar-F
+	background: var(--danger)
+.healthbar-none
+	background: var(--state-hover)
+
+// --- Skill usage over time ----------------------------------------------------
+// Stacked columns. --col-height and --seg-height are written per column and
+// segment by SkillTrendPanel.svelte.
+.skilltrend
+	display: flex
+	align-items: flex-end
+	gap: 2px
+	height: 96px
+	min-width: 320px
+
+// A week with no calls still gets a hairline, so an empty stretch reads as a
+// zero baseline rather than as a chart that failed to draw.
+.skillcol
+	display: flex
+	flex-direction: column-reverse
+	flex: 1 0 4px
+	min-width: 4px
+	height: var(--col-height, 0%)
+	min-height: 1px
+	background: var(--border)
+	border-radius: 1px
+	overflow: hidden
+
+.skillseg
+	display: block
+	width: 100%
+	height: var(--seg-height, 0%)
+
+.skillkey
+	display: inline-block
+	width: 8px
+	height: 8px
+	border-radius: 2px
+
+// Six named skills plus a rolled-up seventh. Derived from the theme colour so
+// the ramp follows whichever palette is applied.
+.skillseg-0
+	background: var(--theme-color)
+.skillseg-1
+	background: color-mix(in srgb, var(--theme-color) 78%, var(--bg))
+.skillseg-2
+	background: color-mix(in srgb, var(--theme-color) 60%, var(--bg))
+.skillseg-3
+	background: color-mix(in srgb, var(--theme-color) 45%, var(--bg))
+.skillseg-4
+	background: color-mix(in srgb, var(--theme-color) 32%, var(--bg))
+.skillseg-5
+	background: color-mix(in srgb, var(--theme-color) 22%, var(--bg))
+.skillseg-6
+	background: var(--state-selected)
+
+// --- Usage ------------------------------------------------------------------
+//
+// Usage groups by project, model or agent — categories with no natural order,
+// so the lightness ramp the skill chart uses would imply one that isn't there.
+// Five semantic hues at two lightnesses give twelve bands that can be told
+// apart; past twelve, every panel rolls the tail into one neutral "Other"
+// rather than inventing colours nobody could distinguish.
+//
+// Each class carries only a custom property, so the same twelve serve an SVG
+// fill and an HTML swatch without a second set of rules.
+.series-0
+	--series-color: var(--theme-color)
+.series-1
+	--series-color: var(--info)
+.series-2
+	--series-color: var(--warning)
+.series-3
+	--series-color: var(--success)
+.series-4
+	--series-color: var(--danger)
+.series-5
+	--series-color: color-mix(in srgb, var(--theme-color) 50%, var(--bg))
+.series-6
+	--series-color: color-mix(in srgb, var(--info) 50%, var(--bg))
+.series-7
+	--series-color: color-mix(in srgb, var(--warning) 50%, var(--bg))
+.series-8
+	--series-color: color-mix(in srgb, var(--success) 50%, var(--bg))
+.series-9
+	--series-color: color-mix(in srgb, var(--danger) 50%, var(--bg))
+.series-10
+	--series-color: color-mix(in srgb, var(--theme-color) 65%, var(--text-primary))
+.series-11
+	--series-color: color-mix(in srgb, var(--info) 65%, var(--text-primary))
+.series-other
+	--series-color: var(--border-strong)
+
+.series-swatch
+	display: inline-block
+	flex-shrink: 0
+	width: 8px
+	height: 8px
+	border-radius: 2px
+	background: var(--series-color, var(--border))
+
+.series-fill
+	fill: var(--series-color, var(--border))
+
+.series-bg
+	background: var(--series-color, var(--border))
+
+// Stacked area chart. The SVG scales to its container; the wrapper is what
+// scrolls when a long range makes the plot wider than the panel.
+.areachart
+	display: block
+	width: 100%
+	min-width: 420px
+	height: 200px
+
+.areachart-grid
+	stroke: var(--border-subtle)
+	stroke-width: 1
+
+.areachart-label
+	fill: var(--text-muted)
+	font-size: 9px
+
+// Treemap. Tiles are positioned by the layout, so the only thing CSS decides
+// is how they respond to a pointer.
+.treemap
+	display: block
+	width: 100%
+	height: 260px
+
+.treemap-tile
+	cursor: pointer
+	outline: none
+
+.treemap-tile rect
+	stroke: var(--bg)
+	stroke-width: 1
+
+.treemap-tile:hover rect,
+.treemap-tile:focus-visible rect
+	stroke: var(--text-primary)
+	stroke-width: 2
+
+.treemap-text
+	fill: var(--text-inverse)
+	font-size: 10px
+	font-weight: 600
+	pointer-events: none
+
+.treemap-sub
+	fill: var(--text-inverse)
+	font-size: 9px
+	opacity: 0.85
+	pointer-events: none
+
+// A ranked row. The layout is shared; only the button form is interactive, so
+// a read-only row does not advertise a click that does nothing.
+.usage-row
+	display: grid
+	grid-template-columns: 1.5rem 8px minmax(0, 1fr) auto auto
+	align-items: center
+	gap: 0.5rem
+	width: 100%
+	padding: 0.15rem 0.25rem
+	background: none
+	border: 0
+	border-radius: 3px
+	color: inherit
+	text-align: left
+
+button.usage-row
+	cursor: pointer
+
+button.usage-row:hover
+	background: var(--state-hover)
+
+button.usage-row[aria-disabled='true']
+	cursor: default
+
+button.usage-row[aria-disabled='true']:hover
+	background: none
+
+.usage-row.hidden-series
+	opacity: 0.4
+
+// The stacked proportion bar behind the cache-efficiency and attribution rows.
+.usage-track
+	position: relative
+	height: 6px
+	border-radius: 3px
+	background: var(--border-subtle)
+	overflow: hidden
+
+.usage-fill
+	display: block
+	height: 100%
+	width: var(--bar-width, 0%)
+	border-radius: 3px
+	background: var(--series-color, var(--theme-color))

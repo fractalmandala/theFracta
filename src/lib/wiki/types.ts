@@ -24,10 +24,8 @@ export interface WikiEntry {
 	tags: string[];
 	createdAt: string;
 	updatedAt: string;
-}
-
-export interface WikiRegistry {
-	version: string;
-	generatedBy: string;
-	entries: WikiEntry[];
+	/** Recall entry ids whose cluster grounded a compiled draft. */
+	compiledFrom?: string[];
+	/** When the Fractorches compiler produced the draft (RFC3339). */
+	compiledAt?: string;
 }

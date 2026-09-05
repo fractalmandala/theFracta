@@ -10,6 +10,14 @@ export interface ReaderSettings {
   showLineNumbers: boolean;
   /** Auto-open `marp: true` documents as a slideshow (#44). */
   autoPresentMarp: boolean;
+  /**
+   * Write edits to disk as they are made, rather than on Cmd+S.
+   *
+   * Only ever applies to documents that already have a location: a new,
+   * pasted or fetched document has nowhere to be written, and autosave must
+   * never answer that by opening a file dialog mid-keystroke.
+   */
+  autosave: boolean;
 }
 
 const STORAGE_KEY = "fracta-knowledge-settings";
@@ -32,6 +40,7 @@ function loadSettings(): ReaderSettings {
     closeOnEscape: true,
     showLineNumbers: true,
     autoPresentMarp: true,
+    autosave: true,
   };
 
   if (typeof localStorage === "undefined") return defaults;

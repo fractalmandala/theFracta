@@ -1,6 +1,6 @@
 {
   "name": "fracta",
-  "description": "Fracta \u2014 one desktop window with Knowledge and Observatory modes",
+  "description": "Fracta — one desktop window with Knowledge and Observatory modes",
   "private": true,
   "packageManager": "pnpm@10.33.2",
   "engines": {
@@ -16,12 +16,14 @@
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "test": "svelte-kit sync && vitest run",
     "tauri": "tauri",
-    "sidecar": "cd services/fractorches && go build -o ../../src-tauri/binaries/fractorches ./cmd/agentsview",
+    "sidecar": "cd services/fractorches && CGO_ENABLED=1 go build -tags fts5 -o ../../src-tauri/binaries/fractorches ./cmd/agentsview",
     "check:privacy": "bash scripts/check-privacy.sh full",
     "check:privacy:staged": "bash scripts/check-privacy.sh staged",
     "check:classes": "node scripts/check-classes.mjs"
   },
   "dependencies": {
+    "@milkdown/crepe": "7.22.1",
+    "@milkdown/kit": "7.22.1",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-cli": "^2.4.1",
     "@tauri-apps/plugin-dialog": "^2.7.0",
@@ -30,7 +32,7 @@
     "@xyflow/svelte": "^1.6.2",
     "dompurify": "^3.3.3",
     "elkjs": "^0.12.0",
-    "fractalicons": "^0.0.3",
+    "fractalicons": "^0.1.0",
     "highlight.js": "^11.11.1",
     "katex": "^0.16.45",
     "lucide-svelte": "^0.475.0",

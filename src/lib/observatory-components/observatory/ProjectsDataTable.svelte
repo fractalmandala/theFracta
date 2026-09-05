@@ -4,7 +4,7 @@
 
 <section class="box gap-md pad-md" aria-labelledby="projects-title">
 	<header class="box gap-3xs">
-		<h2 id="projects-title" class="text-lg weight-600 m-0">Project inventory</h2>
+		<h2 id="projects-title" class="text-lg weight-600">Project inventory</h2>
 	</header>
 	<label class="row ycenter gap-2xs text-sm text-secondary pad-y-2xs">
 		<span>Find project</span>

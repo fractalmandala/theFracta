@@ -13,7 +13,7 @@
  * exactly the case both panes hit since they `white-space: pre-wrap`.
  */
 
-export type ViewMode = "viewer" | "raw" | "editor";
+export type ViewMode = "viewer" | "raw" | "rich" | "editor";
 
 const TOOLBAR_TABBAR_HEIGHT = 80; // approximate sticky chrome at top
 
@@ -21,6 +21,9 @@ const TOOLBAR_TABBAR_HEIGHT = 80; // approximate sticky chrome at top
 export function getCurrentSourceLine(mode: ViewMode): number {
   if (mode === "viewer") return readViewerLine();
   if (mode === "raw") return readRawLine();
+  // ProseMirror's document does not carry the markdown's line numbers, so
+  // rich text has no source line to report.
+  if (mode === "rich") return 0;
   return readEditorLine();
 }
 
@@ -37,13 +40,14 @@ export function scrollToSourceLine(mode: ViewMode, line: number): void {
   }
   if (mode === "viewer") scrollViewerToLine(line);
   else if (mode === "raw") scrollRawToLine(line);
+  else if (mode === "rich") window.scrollTo(0, 0);
   else scrollEditorToLine(line);
 }
 
 // --- Viewer (rendered HTML with data-source-line stamps) ---
 
 function readViewerLine(): number {
-  const article = document.querySelector("article.md-content");
+  const article = document.querySelector("article.content-shell");
   if (!article) return 0;
   const elements = article.querySelectorAll<HTMLElement>("[data-source-line]");
   if (elements.length === 0) return 0;
@@ -66,7 +70,7 @@ function readViewerLine(): number {
 }
 
 function scrollViewerToLine(anchor: number): void {
-  const article = document.querySelector("article.md-content");
+  const article = document.querySelector("article.content-shell");
   if (!article) return;
   const elements = Array.from(article.querySelectorAll<HTMLElement>("[data-source-line]"));
   if (elements.length === 0) return;
