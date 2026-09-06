@@ -66,4 +66,43 @@ describe('wiki entry file format', () => {
 		expect(isRenderableDate('')).toBe(false);
 		expect(isRenderableDate('not-a-date')).toBe(false);
 	});
+
+	it('parses OKF concept frontmatter with sections, multi-line tags, and sources', () => {
+		const okfMarkdown = `---
+type: Concept
+title: "Wiki origin - chats as knowledge base"
+description: "The wiki surface was conceived as a fractal system over the chat archive."
+status: draft
+tags:
+  - fracta-era1
+  - wiki
+  - memory
+sources:
+  - id: "deepseek-harness:session-123"
+    title: "deepseek-harness transcript ref"
+    reference: "deepseek-harness:session-123"
+    timestamp: "2026-09-05"
+generated:
+  by: "okf-precursor-migrator"
+  at: "2026-09-05T21:19:32.287Z"
+---
+
+# Wiki origin - chats as knowledge base
+
+Body content here.
+`;
+		const parsed = entryFromMarkdown(okfMarkdown, 'wiki/core-concepts/wiki-origin-chats-as-knowledge-base.md');
+		expect(parsed).not.toBeNull();
+		expect(parsed?.id).toBe('wiki-origin-chats-as-knowledge-base');
+		expect(parsed?.title).toBe('Wiki origin - chats as knowledge base');
+		expect(parsed?.type).toBe('Concept');
+		expect(parsed?.section).toBe('core-concepts');
+		expect(parsed?.sectionTitle).toBe('Core Concepts');
+		expect(parsed?.status).toBe('draft');
+		expect(parsed?.tags).toEqual(['fracta-era1', 'wiki', 'memory']);
+		expect(parsed?.sources?.length).toBe(1);
+		expect(parsed?.sources?.[0].id).toBe('deepseek-harness:session-123');
+		expect(parsed?.generated?.by).toBe('okf-precursor-migrator');
+	});
 });
+

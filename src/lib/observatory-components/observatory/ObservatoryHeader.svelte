@@ -27,6 +27,43 @@
 		{ id: "data", label: "Data" },
 	];
 
+	// --- Project filter ---------------------------------------------------------
+	//
+	// `Dropdown` takes MenuItem objects, not names: each entry carries the action
+	// that applies it. `active` marks the one currently in effect, which the
+	// contract's .navtree-link.active renders — a menu with no indication of the
+	// current value cannot replace a select.
+	const projectItems = $derived([
+		{
+			label: 'All projects',
+			active: observatory.selectedProject === 'all',
+			onSelect: () => selectProject('all')
+		},
+		...observatory.availableProjects.map((project) => ({
+			// Sessions the service could not attribute come back with an empty
+			// name, which would render as a blank row that looks like a bug. The
+			// label is what is shown; the value it filters by is still the empty
+			// string the service uses.
+			label: project || 'Unattributed',
+			active: observatory.selectedProject === project,
+			onSelect: () => selectProject(project)
+		}))
+	]);
+
+	/** Project names are often full paths; the header shows the last segment. */
+	const projectLabel = $derived.by(() => {
+		const project = observatory.selectedProject;
+		if (project === 'all') return 'all';
+		if (!project) return 'Unattributed';
+		return project.split('/').filter(Boolean).pop() ?? project;
+	});
+
+	function selectProject(project: string) {
+		if (observatory.selectedProject === project) return;
+		observatory.selectedProject = project;
+		void observatory.applyFilters();
+	}
+
 	// --- Usage chrome -----------------------------------------------------------
 	// Cost and tokens are two readings of the same rows, and the token-type
 	// picker narrows the second one. Both govern every panel on the Usage tab,
@@ -123,6 +160,24 @@
   app header already has a right-panel toggle that drives whichever rail the
   current surface has mounted. Two controls for one panel is one too many.
 -->
+{#snippet projectTrigger(props: Record<string, unknown>)}
+	<!--
+	  The full name goes in the tooltip, not the button: these are often absolute
+	  paths, and one of them at full length would push every other control out of
+	  the header.
+	-->
+	<button
+		{...props}
+		class="button small ghost shrink-0 tip row ycenter gap-3xs"
+		data-tip={observatory.selectedProject === 'all'
+			? 'Filter by project'
+			: observatory.selectedProject || 'Unattributed'}
+	>
+		<span class="text-muted">Project</span>
+		<span class="truncate trigger-value">{projectLabel}</span>
+	</button>
+{/snippet}
+
 <SurfaceActions>
 	<nav
 		class="row ycenter gap-sm scroll-x pad-left-sm"
@@ -209,23 +264,16 @@
 			</select>
 		</div>
 		</label>
-		<Dropdown items={observatory.availableProjects}/>
-		<label
-			class="row ycenter gap-3xs text-xs text-muted shrink-0 tip"
-			data-tip="Filter by project"
-		>
-			<span>Project</span>
-			<select
-				class="select select-compact text-xs mono"
-				bind:value={observatory.selectedProject}
-				onchange={() => observatory.applyFilters()}
-			>
-				<option value="all">all</option>
-				{#each observatory.availableProjects as project}<option
-						value={project}>{project}</option
-					>{/each}
-			</select>
-		</label>
+		<!--
+		  Project is a menu rather than a <select> because the list runs to a
+		  hundred entries and each one needs its full name readable; a compact
+		  select truncated them to the point of being unusable.
+
+		  The trigger is a snippet so it wears the header's own button styling
+		  rather than the component's default, and carries the current value —
+		  a menu that does not say what is selected is not a filter.
+		-->
+		<Dropdown items={projectItems} trigger={projectTrigger} />
 		<label
 			class="row ycenter gap-3xs text-xs text-muted shrink-0 tip"
 			data-tip="Filter by model"

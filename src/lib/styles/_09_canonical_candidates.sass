@@ -1,27 +1,3 @@
-:root
-	--transin-2: cubic-bezier(0.550, 0.055, 0.675, 0.190)
-	--transin-3: cubic-bezier(0.755, 0.050, 0.855, 0.060)
-	--transin-1: cubic-bezier(0.470, 0.000, 0.745, 0.715)
-	--transout-1: cubic-bezier(0.390, 0.575, 0.565, 1.000)
-	--transout-2: cubic-bezier(0.215, 0.610, 0.355, 1.000)
-	--transout-3: cubic-bezier(0.230, 1.000, 0.320, 1.000)
-	--trans-button: var(--speed-0) var(--transout-2)
-	--speed-1: 90ms
-	--speed-2: 140ms
-	--speed-3: 220ms
-	--speed-0: 40ms
-	--text-2xs: 0.65rem
-	--text-xs: 0.75rem
-	--text-sm: 0.875rem
-	--text-bs: clamp(1rem, 1rem + 0vw, 1rem)
-	--text-lg: clamp(1.2rem, 1.1456rem + 0.2418vw, 1.333rem)
-	--text-xl: clamp(1.44rem, 1.3022rem + 0.6125vw, 1.7769rem)
-	--text-2xl: clamp(1.728rem, 1.4659rem + 1.1647vw, 2.3686rem)
-	--text-3xl: clamp(2.0736rem, 1.6303rem + 1.9704vw, 3.1573rem)
-	--text-4xl: clamp(2.4883rem, 1.7845rem + 3.128vw, 4.2087rem)
-	--text-5xl: clamp(2.986rem, 1.9124rem + 4.7714vw, 5.6102rem)
-	--radius-4: 4px
-
 p, small, li, ol, ul, h6, h5, h4, h3, h2, h1
 	margin: 0
 
@@ -174,6 +150,7 @@ a.card-outline, a.card
 				color: var(--theme-color)
 		&:hover
 			background: var(--theme-color-alt)
+			transform: scale(1.02)
 
 .button
 	&.header-nav
@@ -189,6 +166,27 @@ a.card-outline, a.card
 		&.active
 			border: none
 			color: var(--theme-color)
+
+.button.is-tab
+	font-size: var(--text-sm)
+	height: 24px
+	background: var(--bg)
+	border: none
+	transition: background var(--trans-button), color var(--trans-button)
+	flex-shrink: shrink
+	&:hover
+		background: var(--theme-color-alt)
+		color: var(--text-inverse)
+	&.active
+		background: var(--theme-color)
+		color: var(--text-inverse)
+
+.tab-row
+	gap: 1px
+	background: var(--bg-footer)
+	border-bottom: 1px solid var(--border)
+	position: sticky
+	top: var(--header-height)
 
 button.link
 	background: none
@@ -684,3 +682,38 @@ select, .select
 		grid-area: select
 	&:after
 		justify-self: end
+// A menu long enough to need scrolling — a project list is a hundred entries.
+// The contract's .popover has no height bound of its own, which is right for a
+// three-item menu and wrong for this; the wrapper is what scrolls so the
+// popover's padding and border stay put.
+.popover-list
+	max-height: min(50vh, 320px)
+	overflow-y: auto
+	overscroll-behavior: contain
+
+// A value shown inside a menu trigger. Bounded because the value can be an
+// absolute path, and a control in a toolbar cannot be allowed to size itself
+// from its data.
+.trigger-value
+	display: inline-block
+	max-width: 10rem
+	vertical-align: bottom
+
+
+.input.ghost
+	border: none
+	font-size: var(--text-bs)
+	padding: 0.25rem 0.4rem
+	height: 24px
+	border-radius: 2px
+	max-width: 120px
+	&::placeholder
+		font-size: var(--text-bs)
+		color: var(--text-secondary)
+
+.outline-grid
+	background: var(--border-strong)
+	gap: 1px
+	border: 1px solid var(--border-strong)
+	.in-outline-grid
+		background: var(--bg)

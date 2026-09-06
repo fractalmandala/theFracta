@@ -49,20 +49,40 @@
 	--rail-width: 64px
 	--titlebar-inset: 88px
 	--text-2xs: 0.65rem
-	--text-xs: 0.75rem
+	--text-xs: 0.8rem
 	--text-sm: 0.9rem
-	--text-bs: clamp(1rem, 1rem + 0vw, 1rem)
-	--text-lg: clamp(1.2rem, 1.1456rem + 0.2418vw, 1.333rem)
-	--text-xl: clamp(1.44rem, 1.3022rem + 0.6125vw, 1.7769rem)
-	--text-2xl: clamp(1.728rem, 1.4659rem + 1.1647vw, 2.3686rem)
-	--text-3xl: clamp(2.0736rem, 1.6303rem + 1.9704vw, 3.1573rem)
-	--text-4xl: clamp(2.4883rem, 1.7845rem + 3.128vw, 4.2087rem)
-	--text-5xl: clamp(2.986rem, 1.9124rem + 4.7714vw, 5.6102rem)
+	--text-bs: clamp(1rem, 0.9489rem + 0.2273vw, 1.125rem)
+	--text-lg: clamp(1.2rem, 1.1795rem + 0.0909vw, 1.25rem)
+	--text-xl: clamp(1.44rem, 1.3899rem + 0.2227vw, 1.5625rem)
+	--text-2xl: clamp(1.728rem, 1.6359rem + 0.4093vw, 1.9531rem)
+	--text-3xl: clamp(2.0736rem, 1.9231rem + 0.6687vw, 2.4414rem)
+	--text-4xl: clamp(2.4883rem, 2.2578rem + 1.0244vw, 3.0518rem)
+	--text-5xl: clamp(2.986rem, 2.647rem + 1.5068vw, 3.8147rem)
 	--green1: #14591D
 	--green2: #4DA167
 	--font-sans: "Lil Grotesk", sans-serif
 	--font-mono: "Google Sans Code", monospace
 	--app-handle: #101010
+	--transin-2: cubic-bezier(0.550, 0.055, 0.675, 0.190)
+	--transin-3: cubic-bezier(0.755, 0.050, 0.855, 0.060)
+	--transin-1: cubic-bezier(0.470, 0.000, 0.745, 0.715)
+	--transout-1: cubic-bezier(0.390, 0.575, 0.565, 1.000)
+	--transout-2: cubic-bezier(0.215, 0.610, 0.355, 1.000)
+	--transout-3: cubic-bezier(0.230, 1.000, 0.320, 1.000)
+	--trans-button: var(--speed-0) var(--transout-2)
+	--speed-1: 90ms
+	--speed-2: 140ms
+	--speed-3: 220ms
+	--speed-0: 40ms
+	--radius-4: 4px
+	--fullhue1: #296D00
+	--fullhue2: #49C300
+	--fullhue3: #00568E
+	--fullhue4: #00304F
+	--fullhue5: #DF8000
+	--fullhue6: #FFB552
+	--fullhue7: #D90010
+	--fullhue8: #FF525F
 
 .green1-theme
 	--green1: #c9f5a4
@@ -86,19 +106,9 @@
 	--green7: #c1ce3c
 	--green8: #d5d94d
 
-.rainbow
-	--hue1: #296D00
-	--hue2: #49C300
-	--hue3: #00568E
-	--hue4: #00304F
-	--hue5: #DF8000
-	--hue6: #FFB552
-	--hue7: #D90010
-	--hue8: #FF525F
-
 .theme-light-default
 	--bg: #FFFFFF
-	--bg-surface: #F8F9FA
+	--bg-surface: #fbfbfa
 	--bg-raised: #FFFCF2
 	--bg-panel: #FFFFFF
 	--bg-footer: #E2E2E2
@@ -109,7 +119,7 @@
 	--bg-canvas: #F8F9FA
 	--border: #d7d7d7
 	--border-subtle: #EDF2F7
-	--border-strong: #a7a7a7
+	--border-strong: #c6c3c3
 	--text-primary: #0d0d0d
 	--text-secondary: #61605e
 	--text-muted: #8f8d8d
@@ -120,6 +130,31 @@
 	--theme-color-alt: #457d13
 	--text-inverse: #FFFFFF
 	--feedback-error: #DC2626
+
+.theme-dark-default
+	--bg: #141414
+	--bg-surface: #171717
+	--bg-raised: #282828
+	--bg-panel: #141414
+	--bg-footer: #202020
+	--bg-popover: #2F2F2F
+	--bg-dialog: #141414
+	--bg-terminal: #212121
+	--bg-input: #141414
+	--bg-canvas: #141414
+	--border: #323232
+	--border-subtle: #262727
+	--border-strong: #373636
+	--text-primary: #f5f7fa
+	--text-secondary: #babcbe
+	--text-muted: #606061
+	--state-hover: #646464
+	--state-hover-subtle: #48494a
+	--state-selected: #313131
+	--theme-color: #4e960f
+	--theme-color-alt: #457d13
+	--text-inverse: #141414
+	--feedback-error: #EE5248
 
 // --- Shell -------------------------------------------------------------------
 // Fracta uses the contract's canonical app-shell markup: header over main.
@@ -186,6 +221,15 @@ body
 // Semantic variants of the contract's .badge. The contract ships .badge with no
 // state colours, so these are Fracta's — and a candidate for the contract if the
 // pattern proves general.
+button.badge
+	appearance: none
+	font-family: inherit
+	cursor: pointer
+	transition: background var(--motion-fast) ease, border-color var(--motion-fast) ease, color var(--motion-fast) ease
+	&:hover:not(.bg-theme)
+		background: var(--state-hover)
+		color: var(--text-primary)
+
 // =============================================================================
 // OBSERVATORY — dashboards take the width; chrome is one toolbar row.
 // =============================================================================
@@ -259,10 +303,6 @@ body
 // The article's own markdown never re-states the title: the H1 is stripped at
 // render, so the page title is the only one and the ladder runs downward.
 .wiki-markdown-body
-	max-width: var(--measure)
-	// The entry's markdown repeats its title as a leading H1. The page header
-	// already renders it, larger, so the duplicate is suppressed — first-of-type
-	// only, so a body that genuinely uses more than one H1 keeps the rest.
 	h1:first-of-type
 		display: none
 	h2
@@ -272,7 +312,9 @@ body
 		font-size: var(--text-lg)
 		margin-top: var(--space-md)
 	p, li
-		color: var(--text-secondary)
+		color: var(--text-primary)
+		font-size: var(--text-lg)
+		margin-bottom: var(--text-lg)
 
 // Label/value pairs align on a real two-column grid with a gap, so a long
 // identifier truncates in its own track instead of colliding with its label.
@@ -306,6 +348,68 @@ body
 	grid-template-columns: repeat(auto-fit, minmax(80px, 1fr))
 	gap: 1px
 	background: var(--border)
+
+.wiki-shell
+	padding: var(--space-xl) 0 var(--space-xl) var(--space-xl)
+	display: grid
+	overflow: auto
+	@media (min-width: 1025px)
+		grid-template-columns: 320px 1fr
+		gap: var(--space-xl)
+		.wiki-markdown-body
+			max-width: 760px
+	@media (min-width: 1281px)
+		grid-template-columns: 360px 1fr
+
+.wiki-left
+	min-width: 0
+
+.wiki-right
+	overflow: auto
+	padding-right: var(--space-xl)
+	min-width: 0
+
+.wiki-section-header
+	cursor: pointer
+	user-select: none
+	border-radius: var(--radius-4)
+	transition: background-color var(--speed-1) ease
+	&:hover
+		background: var(--bg-surface)
+
+.wiki-entry-item
+	border-radius: var(--radius-4)
+	transition: background-color var(--speed-1) ease
+	text-align: left
+	width: 100%
+	&:hover
+		background: var(--bg-surface)
+	&.active
+		background: var(--bg-raised)
+
+.wiki-status-dot
+	width: 6px
+	height: 6px
+	border-radius: 50%
+	flex-shrink: 0
+	&.stable
+		background: var(--green2)
+	&.draft
+		background: var(--fullhue5)
+	&.proposed
+		background: var(--fullhue3)
+	&.stale
+		background: var(--text-muted)
+
+.wiki-source-item
+	border-radius: var(--radius-4)
+	background: var(--bg-surface)
+	border: 1px solid var(--border)
+
+.bg-surface
+	background: var(--bg-surface)
+
+
 
 // =============================================================================
 // NOTES — split mode splits; the TOC is a rail, not an overlay.
@@ -652,8 +756,6 @@ textarea.editor
 // an exact match. This family has now been deleted twice by that mistake.
 .rail-left
 	border-right: 1px solid var(--border)
-.rail-right
-	border-left: 1px solid var(--border)
 
 .boxnode-kind-agent
 	box-shadow: inset 2px 0 0 var(--theme-color)
@@ -1149,3 +1251,21 @@ button.usage-row[aria-disabled='true']:hover
 	width: var(--bar-width, 0%)
 	border-radius: 3px
 	background: var(--series-color, var(--theme-color))
+
+// --- Theme mode view transition ---------------------------------------------
+::view-transition-group(root)
+	animation: none
+
+::view-transition-old(root), ::view-transition-new(root)
+	animation: none
+	mix-blend-mode: normal
+	width: 100vw
+	height: 100vh
+	object-fit: cover
+	object-position: top left
+
+::view-transition-old(root)
+	z-index: 0
+
+::view-transition-new(root)
+	z-index: 1

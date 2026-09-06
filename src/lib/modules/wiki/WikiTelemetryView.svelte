@@ -34,176 +34,117 @@
 		}
 		return [...counts.entries()].sort((a, b) => b[1] - a[1]);
 	});
+
+	// Tags and filtering are owned by wikiState so telemetry and sidebar filters stay in sync.
+	const distinctTags = $derived(wikiState.allTags);
+	const selectedTags = $derived(wikiState.selectedTags);
+	const matchMode = $derived(wikiState.tagMatchMode);
+	const filteredArticles = $derived(wikiState.filteredArticles);
 </script>
 
 <div class="min0 box grow hfull scroll-y pad-md gap-md">
-	<!-- Top Bar -->
-	<div class="row ycenter xbetween pad-bottom-xs border-bottom">
-		<div class="row ycenter gap-xs mono text-xs text-secondary">
-			<Icon icon={luActivity} size={14} />
-			<span class="tt-u weight-600 text-primary">KNOWLEDGE TELEMETRY & SYSTEM STATE</span>
-		</div>
-		<div class="row ycenter gap-xs mono text-xs text-secondary">
-			<span>articles {totalArticles}</span>
-			<span>•</span>
-			<span>corpus {corpusTotal}{wikiCorpus.truncated ? '+' : ''}</span>
-			{#if wikiCorpus.loadedAt}
-				<span>•</span>
-				<span>fetched {new Date(wikiCorpus.loadedAt).toLocaleTimeString()}</span>
-			{/if}
-		</div>
+	<div class="box">
+		<h1 class="text-3xl">Wiki Telemetry</h1>
+		<p class="tt-u mono text-theme">[ {totalArticles} articles | {corpusTotal}{wikiCorpus.truncated ? '+' : ''} corpus | {draftCount} draft ]</p>
+	</div>
+	<div class="card-grid outline-grid">
+		{#each articleTypeCounts as [type, count] (type)}
+			<div class="in-outline-grid box pad-sm gap-3xs">
+				<span class="card-title text-xl">{type}</span>
+				<span class="text-bs text-theme">{count}</span>
+			</div>
+		{/each}
 	</div>
 
-	<!-- 4-Card Telemetry Grid (matching Screenshot 1) -->
-	<div class="card-grid gap-sm grid-4 gap-md">
-		<!-- Card 1: Article store -->
-		<div class="radius-4 box gap-sm border pad-sm">
-			<div class="ybase gap-sm pad-bottom-xs border-bottom row ycenter xbetween mono text-2xs tt-u tracking-wider text-secondary">
-				<span>ARTICLE STORE ▸</span>
+	<!-- Distinct Tags Register / Filter Section -->
+	<div class="radius-4 box gap-xs border pad-sm">
+		<div class="row ycenter xbetween mono text-xs border-bottom pad-bottom-xs">
+			<div class="row ycenter gap-sm">
+				<span class="tt-u weight-600">TAGS REGISTER</span>
+				<span class="text-secondary">{distinctTags.length} DISTINCT TAGS</span>
 			</div>
-
-			<div class="row gap-sm ycenter">
-				<!-- Matrix Visual -->
-				<div class="wiki-matrix-grid">
-					{#each matrixBlocks as block (block.id)}
-						<div class="pad-2xs text-xs" class:active={block.active}></div>
-					{/each}
-				</div>
-
-				<!-- Stats column -->
-				<div class="box gap-2xs mono text-xs grow">
-					<div class="text-2xs text-secondary tt-u">Articles</div>
-					<div class="mono text-xl tabular-nums text-primary weight-600">{totalArticles} items</div>
-					<div class="badge mono pad-x-2xs pad-y-2xs text-2xs border">
-						{stableCount} stable
+			<div class="row ycenter gap-sm">
+				{#if selectedTags.length > 1}
+					<div class="row ycenter gap-3xs">
+						<span class="text-2xs text-secondary">MATCH:</span>
+						<div class="segmented">
+							<button
+								type="button"
+								class="segmented-item text-2xs mono"
+								class:active={matchMode === 'any'}
+								onclick={() => wikiState.setTagMatchMode('any')}
+							>
+								ANY
+							</button>
+							<button
+								type="button"
+								class="segmented-item text-2xs mono"
+								class:active={matchMode === 'all'}
+								onclick={() => wikiState.setTagMatchMode('all')}
+							>
+								ALL
+							</button>
+						</div>
 					</div>
-					<div class="badge mono pad-x-2xs pad-y-2xs text-2xs border">
-						{draftCount} draft or proposed
-					</div>
-				</div>
-			</div>
-
-			<div class="text-muted text-xs mono text-2xs text-secondary border-top pad-top-xs">
-				{#if wikiStore.loading}
-					Loading local article store…
-				{:else if wikiStore.unavailable}
-					{wikiStore.unavailable}
-				{:else if wikiStore.error}
-					Store error: {wikiStore.error}
-				{:else if wikiStore.skippedFiles > 0}
-					{wikiStore.skippedFiles} malformed file{wikiStore.skippedFiles === 1 ? '' : 's'} skipped ·
-					loaded {new Date(wikiStore.loadedAt ?? '').toLocaleTimeString()}
-				{:else}
-					Loaded from local store
-					{#if wikiStore.loadedAt}
-						· {new Date(wikiStore.loadedAt).toLocaleTimeString()}
-					{/if}
+				{/if}
+				{#if selectedTags.length > 0}
+					<button
+						type="button"
+						class="button text-2xs mono pad-x-xs pad-y-3xs text-theme"
+						onclick={() => wikiState.clearTags()}
+					>
+						CLEAR ({selectedTags.length})
+					</button>
 				{/if}
 			</div>
 		</div>
 
-		<!-- Card 2: Recall corpus by agent -->
-		<div class="radius-4 box gap-sm border pad-sm">
-			<div class="ybase gap-sm pad-bottom-xs border-bottom row ycenter xbetween mono text-2xs tt-u tracking-wider text-secondary">
-				<span>CORPUS BY AGENT ▸</span>
-				<Icon icon={luDatabase} size={12} />
+		{#if distinctTags.length === 0}
+			<span class="text-2xs text-secondary mono pad-y-xs">No tags recorded across articles.</span>
+		{:else}
+			<div class="row wrap gap-xs pad-y-2xs">
+				{#each distinctTags as { tag, count } (tag)}
+					{@const isSelected = selectedTags.includes(tag)}
+					<button
+						type="button"
+						class="badge mono text-2xs cursor-pointer pad-x-xs pad-y-3xs row ycenter gap-3xs"
+						class:bg-theme={isSelected}
+						class:text-inverse={isSelected}
+						aria-pressed={isSelected}
+						onclick={() => wikiState.toggleTag(tag)}
+					>
+						<span>#{tag}</span>
+						<span class="text-2xs" class:text-secondary={!isSelected} class:text-inverse={isSelected}>
+							{count}
+						</span>
+					</button>
+				{/each}
 			</div>
-
-			<div class="box gap-2xs mono text-xs">
-				{#if wikiCorpus.loading && !wikiCorpus.loaded}
-					<span class="text-2xs text-secondary">Loading corpus…</span>
-				{:else if wikiCorpus.error}
-					<span class="text-2xs text-secondary">Corpus unavailable: {wikiCorpus.error}</span>
-				{:else if wikiCorpus.byAgent.length === 0}
-					<span class="text-2xs text-secondary">No corpus entries in the current filter.</span>
-				{:else}
-					{#each wikiCorpus.byAgent.slice(0, 6) as [agent, count] (agent)}
-						<div class="row ycenter xbetween pad-y-2xs border-bottom">
-							<span class="badge radius-32 gap-3xs text-2xs tt-u">{agent}</span>
-							<span class="text-secondary text-2xs">{count} entries</span>
-						</div>
-					{/each}
-				{/if}
-			</div>
-
-			<div class="text-muted text-xs mono text-2xs text-secondary border-top pad-top-xs">
-				{#if wikiCorpus.truncated}
-					First {corpusTotal} matching entries shown; more exist server-side
-				{:else}
-					{corpusTotal} entries from the Fractorches recall corpus
-				{/if}
-			</div>
-		</div>
-
-		<!-- Card 3: Article taxonomy distribution -->
-		<div class="radius-4 box gap-sm border pad-sm">
-			<div class="ybase gap-sm pad-bottom-xs border-bottom row ycenter xbetween mono text-2xs tt-u tracking-wider text-secondary">
-				<span>ARTICLE TAXONOMY ▸</span>
-				<Icon icon={luLayers} size={12} />
-			</div>
-
-			<div class="box gap-2xs mono text-xs">
-				{#if articleTypeCounts.length === 0}
-					<span class="text-2xs text-secondary">No articles yet.</span>
-				{:else}
-					{#each articleTypeCounts as [type, count] (type)}
-						<div class="row ycenter xbetween text-2xs">
-							<span class="text-secondary tt-u">{type}</span>
-							<span class="weight-500">{count}</span>
-						</div>
-					{/each}
-				{/if}
-			</div>
-
-			<div class="text-muted text-xs mono text-2xs text-secondary border-top pad-top-xs">
-				{totalChatRefs} chat citation{totalChatRefs === 1 ? '' : 's'} across all articles
-			</div>
-		</div>
-
-		<!-- Card 4: Corpus review states + store facts -->
-		<div class="radius-4 box gap-sm border pad-sm">
-			<div class="ybase gap-sm pad-bottom-xs border-bottom row ycenter xbetween mono text-2xs tt-u tracking-wider text-secondary">
-				<span>CORPUS REVIEW STATES ▸</span>
-				<Icon icon={luShield} size={12} />
-			</div>
-
-			<div class="box gap-2xs mono text-xs">
-				{#if wikiCorpus.error}
-					<span class="text-2xs text-secondary">Corpus unavailable.</span>
-				{:else if wikiCorpus.byReviewState.length === 0}
-					<span class="text-2xs text-secondary">No corpus entries in the current filter.</span>
-				{:else}
-					{#each wikiCorpus.byReviewState as [state, count] (state)}
-						<div class="row ycenter xbetween text-2xs">
-							<span class="text-secondary">{state}</span>
-							<span class="weight-500">{count}</span>
-						</div>
-					{/each}
-				{/if}
-			</div>
-
-			<div class="text-muted text-xs mono text-2xs text-secondary border-top pad-top-xs">
-				{#if wikiStore.dirSource}
-					Store: {wikiStore.dirSource} · Git-ignored
-				{:else}
-					Store: Git-ignored local articles
-				{/if}
-			</div>
-		</div>
+		{/if}
 	</div>
 
 	<!-- Recent Topics Table -->
 	<div class="radius-4 box gap-xs border pad-sm">
 		<div class="row ycenter xbetween mono text-xs border-bottom pad-bottom-xs">
 			<span class="tt-u weight-600">ARTICLE REGISTER</span>
-			<span class="text-secondary">{totalArticles} TOPICS</span>
+			<div class="row ycenter gap-sm">
+				{#if selectedTags.length > 0}
+					<span class="text-theme">
+						FILTERED: {filteredArticles.length} OF {totalArticles} TOPICS
+					</span>
+				{:else}
+					<span class="text-secondary">{totalArticles} TOPICS</span>
+				{/if}
+			</div>
 		</div>
 
 		<div class="box gap-2xs mono text-xs">
-			{#if articles.length === 0}
-				<span class="text-2xs text-secondary">No articles yet.</span>
+			{#if filteredArticles.length === 0}
+				<span class="text-2xs text-secondary pad-y-sm">
+					{totalArticles === 0 ? 'No articles yet.' : 'No articles match the selected tags.'}
+				</span>
 			{:else}
-				{#each articles as entry (entry.id)}
+				{#each filteredArticles as entry (entry.id)}
 					<button
 						class="gap-sm pad-y-3xs text-sm row ycenter xbetween pad-xs border-bottom"
 						onclick={() => wikiState.pick(entry.id)}

@@ -1,0 +1,5 @@
+#!/bin/sh
+# Local OKF Utility Launcher
+# Uses Node 22.5+ native TypeScript support and native SQLite
+DIR="$(cd "$(dirname "$0")/.." && pwd)"
+exec node --experimental-strip-types "$DIR/src/cli.ts" "$@"

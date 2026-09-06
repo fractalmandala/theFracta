@@ -60,8 +60,8 @@
 		document.documentElement.animate(
 			{ clipPath: [from, 'inset(0 0 0 0)'] },
 			{
-				duration: 520,
-				easing: 'cubic-bezier(0.65, 0, 0.35, 1)',
+				duration: 750,
+				easing: 'cubic-bezier(0.25, 1, 0.5, 1)',
 				pseudoElement: '::view-transition-new(root)'
 			}
 		);
@@ -130,7 +130,7 @@
 			const surface = surfaces[Number(event.key) - 1];
 			if (surface) {
 				event.preventDefault();
-				activeView.set(surface.id);
+				activeView.switch(surface.id);
 			}
 		}
 	}
@@ -180,7 +180,7 @@
 						? "page"
 						: undefined}
 					data-tip="{surface.label} (⌘{i + 1})"
-					onclick={() => activeView.set(surface.id)}
+					onclick={() => activeView.switch(surface.id)}
 					>{surface.label}</button
 				>
 			{/each}

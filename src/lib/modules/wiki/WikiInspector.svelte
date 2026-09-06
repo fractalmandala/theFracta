@@ -29,7 +29,7 @@
 	}
 </script>
 
-<div class="wfull min0 surface box hfull">
+<div class="wfull min0 box hfull">
 	<div class="box gap-md pad-sm">
 		<!-- Inspector Header -->
 		<div class="row ycenter xbetween border-bottom pad-bottom-xs">

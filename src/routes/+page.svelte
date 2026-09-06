@@ -24,5 +24,5 @@
 		Notes, Bench and Wiki are the surfaces that exist today. Pick one from the
 		title bar, or press ⌘1, ⌘2 or ⌘3.
 	</p>
-	<button class="button small ghost" onclick={() => activeView.set("notes")}>Go to Notes</button>
+	<button class="button small ghost" onclick={() => activeView.switch("notes")}>Go to Notes</button>
 </div>

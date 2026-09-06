@@ -487,3 +487,60 @@ path below `writeDraft` is unchanged from the Cmd+S path that already worked.
 `ObservatoryHeader.svelte` has a type error at its new `Dropdown` usage
 (`items={() => …}` against `MenuItem[]`) from concurrent work in another lane;
 untouched here.
+
+## 2026-09-05 — Bench: the Project filter as a menu
+
+`ObservatoryHeader` had a `<Dropdown items={observatory.availableProjects}/>`
+sitting beside the Project `<select>` it was presumably meant to replace. The
+type error svelte-check reported was the smallest of three problems.
+
+### What was actually wrong
+
+- **`Dropdown` takes `MenuItem[]`, not names.** `availableProjects` is
+  `string[]`, so every `item.label` would have been `undefined`: the menu would
+  have rendered the right number of blank rows, each closing without doing
+  anything, since there was no `onSelect` to call. A silently inert control,
+  not a crash — and the keyed each (`item.label + i`) stays unique on
+  `undefined`, so nothing would have failed loudly either.
+- **`Dropdown` was entirely unstyled.** `.menu`, `.menu-item`, `.menu-sep`,
+  `.popover-wrap` and `.muted` are defined nowhere — not in the app's SASS, not
+  in fractalstyler2 — and the class gate was already reporting all five.
+- **A menu is not a filter.** It has no notion of a current value, so even
+  typed correctly it would not have shown what was selected or called
+  `applyFilters()`.
+
+### What was done
+
+- **`Dropdown.svelte` now uses the contract's own vocabulary** — `.relative` to
+  anchor, `.popover`/`.open` for the surface, `.navtree-link` (with its existing
+  `.active`) for the rows — rather than a private `.menu` family. That removes
+  five undefined classes instead of adding five definitions for a primitive the
+  contract already has, and the component now matches the app it lives in.
+  `MenuItem` gained `active?: boolean` for a menu that picks a value. The
+  `hidden` attribute was dropped: `.popover` hides itself with `visibility`,
+  which preserves its transition and still leaves the items out of the tab
+  order, where `display: none` would defeat both.
+- **`.popover-list`** added to `_09_canonical_candidates.sass` — a genuine gap.
+  The contract's popover has no height bound, which is right for three items and
+  wrong for a hundred projects.
+- **The Project `<select>` is gone**, replaced by the wired `Dropdown`. Project
+  names are often absolute paths, which the compact select truncated to
+  uselessness; the menu shows them in full and scrolls.
+- Two defects found while verifying it: the unattributed project rendered as a
+  **blank row** (now "Unattributed", while still filtering by the empty string
+  the service uses), and the trigger sized itself from its data — one absolute
+  path would have pushed the rest of the header out. The trigger shows the last
+  path segment, bounded by `.trigger-value`, with the full name in its tooltip.
+
+### Verification evidence
+
+- `svelte-check`: 0 errors. Class gate: no failures outside the Studio lane.
+- Driven in the app: the menu opens with 100 entries, scrolls, marks the current
+  selection, and selecting `fractalmandala` moved the dashboard from
+  581 sessions / 95,699 messages to 62 / 9,054 with the trigger updating to
+  match.
+
+### Note
+
+Model is still a `<select>`. One control converted, as asked; the pair should
+end up consistent.

@@ -303,13 +303,6 @@
 
 <article
   bind:this={articleEl}
-  class="content-shell"
-  style="
-    --content-max: {getContentMaxWidth($settings)};
-    font-size: {$settings.fontSize}px;
-    line-height: {$settings.lineHeight};
-    --md-font-family: {fontFamilyMap[$settings.fontFamily]};
-  "
->
+  class="box wfull">
   {@html html}
 </article>

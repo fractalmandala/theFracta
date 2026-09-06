@@ -1,15 +1,21 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { Icon } from 'fractalicons';
-	import { luChevronDown } from 'fractalicons/lucide';
+	import { luChevronDown, luCheck } from 'fractalicons/lucide';
 
 	export interface MenuItem {
 		label: string;
 		onSelect?: () => void;
 		danger?: boolean;
 		disabled?: boolean;
+		/** The item that is currently in effect, for a menu that picks a value. */
+		active?: boolean;
 		shortcut?: string;
 		leading?: import('svelte').Snippet;
+		/** If true, selecting this item does not close the dropdown (useful for multi-select). */
+		keepOpen?: boolean;
+		/** For checkable / multi-select menu items. */
+		checked?: boolean;
 	}
 
 	interface Props {
@@ -114,7 +120,13 @@
 	});
 </script>
 
-<span class="popover-wrap {className}" bind:this={wrap}>
+<!--
+  Built from the contract's own popover vocabulary — `.relative` to anchor,
+  `.popover`/`.open` for the surface, `.navtree-link` for the rows — rather than
+  a private `.menu` family. Those classes were defined nowhere, so this rendered
+  as unstyled structure and failed the class gate.
+-->
+<span class="relative {className}" bind:this={wrap}>
 	{#if trigger}
 		{@render trigger(triggerProps)}
 	{:else}
@@ -133,41 +145,57 @@
 		</button>
 	{/if}
 
+	<!--
+	  No `hidden` attribute: `.popover` already hides itself with `visibility`,
+	  which keeps its open/close transition and still takes the items out of the
+	  tab order. `display: none` from `hidden` would defeat both.
+	-->
 	<div
-		class="menu"
+		class="popover pad-3xs"
+		class:open
 		role="menu"
-		data-placement="bottom"
 		data-align={align}
-		data-open={open}
-		hidden={!open}
 		tabindex="-1"
 		onkeydown={onKeydown}
 	>
-		{#each items as item, i (item.label + i)}
-			<button
-				bind:this={itemRefs[i]}
-				class="menu-item"
-				role="menuitem"
-				data-variant={item.danger ? 'danger' : undefined}
-				data-state={item.disabled ? 'disabled' : undefined}
-				disabled={item.disabled}
-				tabindex={active === i ? 0 : -1}
-				onclick={() => {
-					item.onSelect?.();
-					setOpen(false, true);
-				}}
-				onmouseenter={() => {
-					active = i;
-				}}
-			>
-				{#if item.leading}{@render item.leading?.()}{/if}
-				<span class="grow">{item.label}</span>
-				{#if item.shortcut}<span class="muted">{item.shortcut}</span>{/if}
-			</button>
-		{/each}
+		<div class="popover-list box gap-3xs">
+			{#each items as item, i (item.label + i)}
+				<button
+					bind:this={itemRefs[i]}
+					class="navtree-link gap-2xs wfull ta-l"
+					class:active={item.active}
+					class:text-danger={item.danger}
+					role="menuitem"
+					disabled={item.disabled}
+					tabindex={active === i ? 0 : -1}
+					onclick={() => {
+						item.onSelect?.();
+						if (!item.keepOpen) {
+							setOpen(false, true);
+						}
+					}}
+					onmouseenter={() => {
+						active = i;
+					}}
+				>
+					{#if item.checked !== undefined}
+						<span class="row ycenter xcenter text-xs shrink-0" style="width: 14px; height: 14px;">
+							{#if item.checked}
+								<Icon icon={luCheck} size={12} />
+							{/if}
+						</span>
+					{:else if item.leading}
+						{@render item.leading?.()}
+					{/if}
+					<span class="grow truncate">{item.label}</span>
+					{#if item.shortcut}<span class="text-muted text-2xs shrink-0">{item.shortcut}</span>{/if}
+				</button>
+			{/each}
+		</div>
 		{#if children}
-			<div class="menu-sep"></div>
-			{@render children()}
+			<div class="border-top pad-top-3xs">
+				{@render children()}
+			</div>
 		{/if}
 	</div>
 </span>

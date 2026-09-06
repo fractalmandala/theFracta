@@ -123,6 +123,33 @@ fn list_entries_in(dir: &Path) -> Vec<WikiEntryFile> {
     files
 }
 
+fn list_all_wiki_entries_in(root: &Path) -> Vec<WikiEntryFile> {
+    let mut all_files = Vec::new();
+
+    if let Ok(entries) = fs::read_dir(root) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                let dir_name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+                if dir_name.starts_with('.') || dir_name == "wiki-precursor" || dir_name == "target" || dir_name == "node_modules" {
+                    continue;
+                }
+                let mut sub_files = list_entries_in(&path);
+                sub_files.retain(|f| !f.name.eq_ignore_ascii_case("index.md"));
+                all_files.extend(sub_files);
+            }
+        }
+    }
+
+    all_files.sort_by(|a, b| {
+        b.modified
+            .cmp(&a.modified)
+            .then_with(|| a.name.cmp(&b.name))
+    });
+    all_files.truncate(MAX_LISTED_ENTRIES);
+    all_files
+}
+
 /// Resolve the wiki store root, creating only its missing `entries/`
 /// directory. Never deletes, truncates, or recreates existing data.
 #[tauri::command]
@@ -136,14 +163,16 @@ pub fn wiki_data_dir() -> Result<WikiRoot, String> {
     })
 }
 
-/// List article files in the store's `entries/` directory, newest first.
+/// List article files across the store's concept directories, newest first.
 /// A missing store is an empty list, not an error: an empty wiki is a real
 /// state, not a failure.
 #[tauri::command]
 pub fn list_wiki_entries() -> Result<Vec<WikiEntryFile>, String> {
-    let dir = entries_dir()?;
-    Ok(list_entries_in(&dir))
+    let (root, _) = resolve_root();
+    let _ = entries_dir();
+    Ok(list_all_wiki_entries_in(&root))
 }
+
 
 #[cfg(test)]
 mod tests {
